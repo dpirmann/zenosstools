@@ -1,0 +1,56 @@
+#!/usr/bin/perl
+
+#=============================================================================
+#=============================================================================
+
+sub usage {
+print <<EOF;
+
+pzenoss_api is a basic interface to the Zenoss JSON API. It is a perl 
+reimplemation of an existing bash zenoss_api script.
+
+Syntax: pzenoss_api "endpoint" "action" "method" "data"
+
+Examples:
+
+pzenoss_api "device_router" "DeviceRouter" "getProductionStates" "{}"
+pzenoss_api "device_router" "DeviceRouter" "getDeviceUids" "{\"uid\":\"/zport/dmd/Devices/Server/Linux\"}"
+
+See: http://wiki.zenoss.org/Working_with_the_JSON_API for more examples
+EOF
+
+exit;
+}
+
+use JSON::Parse ':all';
+use Data::Dumper;
+
+require "zapi_toolkit.pl";
+
+#parse our arguments
+my $ROUTER_ENDPOINT=shift;
+my $ROUTER_ACTION=shift;
+my $ROUTER_METHOD=shift;
+my $DATA=shift;
+my $output;
+
+unless ($ROUTER_ENDPOINT && $ROUTER_ACTION && $ROUTER_METHOD && $DATA) {
+    &usage;
+}
+
+
+print "Endpoint = $ROUTER_ENDPOINT\n";
+print "Action   = $ROUTER_ACTION\n";
+print "Method   = $ROUTER_METHOD\n";
+print "Data     = $DATA\n";
+
+
+$output = &zapi_toolkit::zcurlpost($ROUTER_ENDPOINT,$ROUTER_ACTION,$ROUTER_METHOD,$DATA);
+die if &zapi_toolkit::catchErrors($output);
+
+my $parsed=parse_json($output);
+print Dumper($parsed);
+print "\n";	
+
+exit;
+
