@@ -1,0 +1,40 @@
+#!/usr/bin/perl
+
+#=============================================================================
+# compare the zenoss device "snmpsysname" to the device's id and name fields
+# (case insensitive)
+#=============================================================================
+
+use JSON::Parse ':all';
+use Data::Dumper;
+
+require 'zapi_toolkit.pl';
+
+my $global_get_devices_limit=3000;
+$debug=1;
+$debugold=1;
+
+my $DATA=qq({"keys":["snmpSysName","name","id"],"limit":$global_get_devices_limit});
+my $output = zapi_toolkit::zcurlpost("device_router","DeviceRouter","getDevices",$DATA);
+my $parsed= parse_json($output);
+my $total=@{%$parsed->{'result'}->{'devices'}};
+	    
+for (my $i=0;$i<$total;$i++) {
+    my $id = %$parsed->{'result'}->{'devices'}[$i]->{'id'};
+    my $name = %$parsed->{'result'}->{'devices'}[$i]->{'name'};
+    my $snmpSysName = %$parsed->{'result'}->{'devices'}[$i]->{'snmpSysName'};
+
+    unless($snmpSysName) {
+	print "No snmpSysName for device $id/$name\n";
+	next;
+    }
+
+    if (uc($id) ne uc($snmpSysName)) {
+	print "ID $id doesn't match sysName $snmpSysName\n";
+    }
+    if (uc($name) ne uc($snmpSysName)) {
+	print "NAME $id doesn't match sysName $snmpSysName\n";
+    }
+}
+	    
+exit;
