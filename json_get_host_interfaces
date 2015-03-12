@@ -1,0 +1,78 @@
+#!/usr/bin/perl
+
+#=============================================================================
+# json_get_host_interfaces
+#=============================================================================
+
+sub usage {
+    print "$0 [-c] hostname [hostname...]\n";
+    print "Given a list of HOSTNAMES (or IP), list out the interfaces modeled on this device";
+    print "Option -c for csv output\n";
+    exit;
+}
+
+use JSON::Parse ':all';
+use Getopt::Std;
+
+require 'zapi_toolkit.pl';
+my $global_get_devices_limit=3000;
+
+my $debug=0;
+
+getopts('ch',\%opts);
+if (defined $opts{'h'}) {
+    &usage;
+}
+
+if (defined $opts{'c'}) {
+    print "Host,IP,Interface\n";
+} else {
+    printf "%-15s %-18.18s %-40s\t%s\n", "Host", "IP", "Interface";
+    printf "=" x 79 . "\n";
+}
+
+while (my $host=shift) {
+
+    #find out the /zport/dmd/host/path for the given host argument
+    my $hostpath=zapi_toolkit::gethostuid($host);
+    next unless ($hostpath =~ m|/zport/dmd|);
+    print "$hostpath\n" if ($debug);
+
+    my $host=$hostpath;
+    $host=~ s|/zport.*devices/||;
+
+    #look up hostpath's components
+    my $data=qq({"uid":"$hostpath","keys":["ipAddresses"],"meta_type":"IpInterface","limit":$global_get_devices_limit});
+    my $output = zapi_toolkit::zcurlpost("device_router","DeviceRouter","getComponents",$data);
+    my $parsed= parse_json($output);
+    my $total = %$parsed->{'result'}->{'totalCount'};
+
+    my %allifs;
+
+    for (my $i=0;$i<$total;$i++) {
+	my $uid=%$parsed->{'result'}->{'data'}[$i]->{'uid'};
+	$uid=~ s|/zport.*interfaces/||;
+	
+	my @foo=@{%$parsed->{'result'}->{'data'}[$i]->{'ipAddresses'}};
+	foreach my $x (@foo) {
+	    $x = substr($x,0,index($x,'/'));
+	    $allifs{$x}=$uid;
+	}
+    }
+
+    foreach $x (sort keys %allifs) {
+	next if ($x eq "127.0.0.1");
+	next if ($x eq "::1");
+	next if ($x =~ /fe80::/);
+	
+	if (defined $opts{'c'}) {
+	    print "$host,$x,$allifs{$x}\n";
+	} else {
+	    printf "%-15.15s %-18.18s %-40s\t%s\n", $host, $x, $allifs{$x};
+	}
+    }
+}
+
+
+exit;
+

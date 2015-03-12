@@ -1,0 +1,69 @@
+#!/usr/bin/perl
+
+#=============================================================================
+# json_get_host_filesystems
+#=============================================================================
+
+sub usage {
+    print "$0 [-c] hostname [hostname...]\n";
+    print "Given a list of HOSTNAMES (or IP), list out the filesystems modeled on this device";
+    print "Option -c for csv output\n";
+    exit;
+}
+
+use JSON::Parse ':all';
+use Getopt::Std;
+
+require 'zapi_toolkit.pl';
+
+my $global_get_devices_limit=3000;
+my $debug=0;
+
+getopts('ch',\%opts);
+if (defined $opts{'h'}) {
+    &usage;
+}
+
+if (defined $opts{'c'}) {
+    print "Host,Size-GB,Used-GB,Pct-Used\n";
+} else {
+    printf "%-15s %-10s %-10s %-10s\t%s\n", "Host", "Size-GB", "Used-GB", "Pct-Used", "Mount";
+    printf "=" x 79 . "\n";
+}
+
+while (my $host=shift) {
+
+    #find out the /zport/dmd/host/path for the given host argument
+    my $hostpath=zapi_toolkit::gethostuid($host);
+    next unless ($hostpath =~ m|/zport/dmd|);
+    print "$hostpath\n" if ($debug);
+
+    my $host=$hostpath;
+    $host=~ s|/zport.*devices/||;
+
+    #look up hostpath's components
+    my $data=qq({"uid":"$hostpath","keys":["name","totalBytes","usedBytes","blockSize","mount"],"meta_type":"FileSystem","limit":$global_get_devices_limit});
+    my $output = zapi_toolkit::zcurlpost("device_router","DeviceRouter","getComponents",$data);
+    my $parsed= parse_json($output);
+    my $total = %$parsed->{'result'}->{'totalCount'};
+    
+    for (my $i=0;$i<$total;$i++) {
+	my $totalBytes=%$parsed->{'result'}->{'data'}[$i]->{'totalBytes'};
+	my $usedBytes=%$parsed->{'result'}->{'data'}[$i]->{'usedBytes'};
+	my $mount=%$parsed->{'result'}->{'data'}[$i]->{'mount'};
+	
+	$totalBytes=$totalBytes/(1024*1024*1024);
+	$usedBytes=$usedBytes/(1024*1024*1024);
+	
+	my $pct=($usedBytes/$totalBytes)*100;
+
+	if (defined $opts{'c'}) {
+	    printf "%s,%-.2f,%.2f,%-.2f,%s\n", $host,$totalBytes,$usedBytes,$pct,$mount;
+	} else {
+	    printf "%-15.15s %-10.2f %-10.2f %-10.2f\t%s\n", $host,$totalBytes,$usedBytes,$pct,$mount;
+	}
+    }
+}
+
+exit;
+
