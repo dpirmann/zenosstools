@@ -1,0 +1,44 @@
+#!/usr/bin/perl
+
+#=============================================================================
+# json_set_collector
+#=============================================================================
+
+sub usage {
+    print "$0: Update the Zenoss Remote Collector for an existing host\n";
+    print "Usage: $0 newcollector host-or-ip [host-or-ip....]\n";
+    exit;
+}
+
+use JSON::Parse ':all';
+use Data::Dumper;
+require 'zapi_toolkit.pl';
+
+$debug=0;
+$debugold=0;
+
+my $newcollector=shift;
+
+#figure out if $newcollector is a collector....
+my @collectors=&zapi_toolkit::getCollectorList;
+unless (grep (/^${newcollector}$/, @collectors)) {
+    print "No such collector '$newcollector' found in Zenoss.\n";
+    exit;
+}
+
+while (my $host=shift) {
+    my $hostpath=&zapi_toolkit::gethostuid($host);
+    if ($hostpath =~ m|/zport/dmd/|) {
+	print "Host $host found at $hostpath, proceeding\n\n"  if ($debug);
+
+	my $data=qq({"uids":["$hostpath"],"hashcheck":"","collector":"$newcollector","moveData":true});
+	my $output = zapi_toolkit::zcurlpost("device_router","DeviceRouter","setCollector",$data);
+	my $success=&zapi_toolkit::catchJsonErrors($output); #prints err if there is one, otherwise silent
+	
+    } else {
+	print STDERR "Host $host not found.\n";
+    }
+}
+
+exit;
+
