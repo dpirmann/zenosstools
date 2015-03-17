@@ -109,8 +109,6 @@ sub catchJsonErrors {
 sub gethostuid {
     my ($val) = @_;
 
-    
-
     #gethostuid can take either an IP address or host name to search on.
     #In order to figure out which we have, we'll convert the value to 
     #decimal and back to dotted - if there's a match it was an IP address.
@@ -182,3 +180,56 @@ sub getCollectorList {
     }
     return @collectors;
 }
+
+#=============================================================================
+# sub get_valid_values 
+# will return a list of valid values for getProductionStates, getPriorities, getDeviceClasses
+#=============================================================================
+sub get_valid_values {
+    my ($type) = @_;
+
+    die "Type must be one of getProductionStates|getPriorities|getDeviceClasses\n"
+	unless ($type =~ /^(getProductionStates|getPriorities|getDeviceClasses)$/);
+
+#these two come back with name/value pairs
+#   perl json_wrapper post "device_router" "DeviceRouter" "getProductionStates" "{}"
+#   perl json_wrapper post "device_router" "DeviceRouter" "getPriorities" "{}"
+    
+#this one just names names
+#   perl json_wrapper post "device_router" "DeviceRouter" "getDeviceClasses" "{}"
+
+    my $resfield;
+    if ($type =~ /^(getProductionStates|getPriorities)$/) {
+	$resfield='data';
+    } else {
+	$resfield='deviceClasses';
+    }
+
+    my $output = zapi_toolkit::zcurlpost("device_router","DeviceRouter","$type");
+    my $parsed= parse_json($output);
+    my $total=@{%$parsed->{'result'}->{$resfield}};
+
+    my %valarry;
+    for (my $i=0;$i<$total;$i++) {
+	my $value=1;
+        if (defined (%$parsed->{'result'}->{$resfield}[$i]->{'value'})) {
+	    $value = %$parsed->{'result'}->{$resfield}[$i]->{'value'};
+	}
+        my $name  = %$parsed->{'result'}->{$resfield}[$i]->{'name'};
+	$valarry{$name}=$value;
+    }
+    return %valarry;
+}
+#Examples:
+#$prodstatevalue{'1000'}='Production';
+#$prodstatevalue{'500'}='Pre-Production';
+#$prodstatevalue{'400'}='Test';
+#$prodstatevalue{'300'}='Maintenance';
+#$prodstatevalue{'-1'}='Decommissioned';
+#$priovalue{'5'}='Highest';
+#$priovalue{'4'}='High';
+#$priovalue{'3'}='Normal';
+#$priovalue{'2'}='Low';
+#$priovalue{'1'}='Lowest';
+#$priovalue{'0'}='Trivial';
+
