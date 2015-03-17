@@ -1,0 +1,77 @@
+#!/usr/bin/perl
+
+#=============================================================================
+# json_set_deviceclass
+#=============================================================================
+
+sub usage {
+    print "$0: Change a host's device class\n";
+    print "Usage: $0 new_device_class [hostname or ip....list]\n";
+    print "new_device_class is, e.g. /Server/Windows\n";
+    print " or you can use 'list' to see the valid device classes.\n";
+    exit;
+}
+
+use JSON::Parse ':all';
+use Data::Dumper;
+require 'zapi_toolkit.pl';
+
+$debug=0;
+$debugold=0;
+
+my $newdevclass=shift;
+
+if ($newdevclass=~/^help$/i) {
+    &usage;
+}
+
+print "new device class = $newdevclass\n" if ($debug);
+
+my %valarry=&zapi_toolkit::get_valid_values('getDeviceClasses');
+
+if ($newdevclass =~ /^list$/i) {
+    print "Valid values for device class:\n";
+    foreach $x (sort keys %valarry) {
+	print "\t$x\n";
+    }
+    exit;
+}
+
+unless (exists($valarry{$newdevclass})) {
+    print "No such device class '$newdevclass' found in Zenoss.\n";
+    exit;
+}
+
+while (my $host=shift) {
+
+    #find out the /zport/dmd/host/path for the given host argument
+    my $hostpath=zapi_toolkit::gethostuid($host);
+    unless ($hostpath=~ m|/zport/dmd|) {
+	print "Address $host not in Zenoss.\n";
+	next;
+    }
+    
+    print "$host $hostpath $newdevclass\n" if ($debug);
+    &move_device($hostpath,$newdevclass);
+}
+
+
+
+sub move_device {
+    my ($uid,$value) = @_;
+
+    my $data = qq({"uids":["$uid"],"target":"/zport/dmd/Devices$value"});
+    my $output = zapi_toolkit::zcurlpost("device_router","DeviceRouter","moveDevices", $data);
+    &zapi_toolkit::catchJsonErrors($output);
+}
+
+
+exit;
+
+
+
+
+
+
+
+
