@@ -272,3 +272,85 @@ sub renamehost {
     my $output=&zapi_toolkit::zcurlget($hostpath,"renameDevice","newId=$newname");
     return $output;
 }
+
+#=============================================================================
+# Function GETINFOKEY
+# Give it an hostpath and it returns an array of device getInfo props
+# (and also cProps)
+#=============================================================================
+
+sub getinfokey {
+    my ($hostpath) = @_;
+
+    my %keyarray;
+
+    #first part, getInfo
+    my $data = qq({"uid":"$hostpath"});
+    my $output = zcurlpost("device_router","DeviceRouter","getInfo",$data);
+    my $parsed= parse_json($output);
+
+    %keyarray=zapi_toolkit::recurseParse("",$parsed->{result}->{data},%keyarray);
+
+    #added this little bit to include a device's custom properties into the array
+    my $output=&zapi_toolkit::zcurlget($hostpath,"deviceCustomEdit","");
+    %keyarray=zapi_toolkit::parsecprop($output,%keyarray);
+
+    return %keyarray;
+}
+
+#=============================================================================
+#sub recurseParse
+#recursively traverses a json_parsed hash of hashes etc and returns
+#a %keyarray hash of key-value pairs
+#=============================================================================
+
+sub recurseParse {
+    my $subname=(caller(0))[3]; my $debugsub=1 if ($debuggy{$subname}==1);
+    logger("Entering $subname") if ($debugsub);
+
+    my ($name,$parsed,%keyarray) = @_;
+    foreach (sort keys %$parsed) {
+	if (ref(%$parsed->{$_}) eq "HASH") {
+	    %keyarray=zapi_toolkit::recurseParse("$name/$_",$parsed->{$_},%keyarray);
+	} elsif (ref(%$parsed->{$_}) eq "ARRAY") {
+            # must figure out how many elements there are in the array, and then iterate 
+	    # this kind of sucks because the keys need to have the array index in them
+	    # to keep them unique. How else to do it.... not sure.
+	    my $ct=@{%$parsed->{$_}}; #number of groups
+	    for (my $gn=0;$gn<$ct;$gn++) {
+		if (ref(%$parsed->{$_}[$gn]) eq "HASH") {
+                    %keyarray=zapi_toolkit::recurseParse("$name/$gn/$_",$parsed->{$_}[$gn],%keyarray);
+                } else {
+                    $keyarray{"$name/$_"}=$parsed->{$_}[$gn] . "," . $keyarray{"$name/$_"};
+                }
+	    }
+	    $keyarray{"$name/$_"} =~ s/,$//;
+
+	} else {
+	    $keyarray{"$name/$_"}=%$parsed->{$_};
+	}
+    }
+    return %keyarray;
+}
+
+#=============================================================================
+# Function PARSECPROP
+# takes the output of the curl get deviceCustomEdit html page and
+# returns a hash of the cprops {variable/type} = value
+#=============================================================================
+sub parsecprop {
+    my ($output,%aar) = @_;
+
+#<input class="tablevalues" type="text" size="50" name="cWindowsDomainName:string" value="" />
+#<input class="tablevalues" type="text" size="50" name="cDateTest:date" value="1900/01/01 00:00:00 US/Central" />
+
+    my @lines = split /\n/, $output;
+    foreach my $line (@lines) {
+	if ($line =~ /input class="tablevalues"/) {
+	    my ($name) = ($line =~ /name=\"(.+?)\"/);
+	    my ($value) = ($line =~ /value=\"(.+?)\"/);
+	    $aar{"/$name"}=$value;
+	}
+    }
+    return %aar;
+}
