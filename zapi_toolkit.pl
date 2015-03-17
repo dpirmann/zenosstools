@@ -35,13 +35,42 @@ sub zcurlpost {
     #in the cmd there's those end of line escaped backslashes to make the command
     #a little easier to read
 
-    my $cmd = qq(curl -s -u "$ZAPIUSER:$ZAPIPASS" -X POST -H "Content-Type: application/json" \\
+    #zenoss5 runs under a self signed SSL cert (https) by default;
+    #so unless you have installed a real cert, ignore the warning
+    my $ins;
+    if ($ZENBASE =~ /^https/) {
+        $ins=" --insecure "; #
+    }
+
+    my $cmd = qq(curl $ins -s -u "$ZAPIUSER:$ZAPIPASS" -X POST -H "Content-Type: application/json" \\
     -d "{\\"action\\":\\"$ROUTER_ACTION\\",\\"method\\":\\"$ROUTER_METHOD\\",\\"data\\":[$DATA], \\"tid\\":1}" \\
     "$ZENBASE/zport/dmd/$ROUTER_ENDPOINT");
 
     return qx($cmd);
 }
 
+#=============================================================================
+# Function ZCURLGET
+# Invokes the curl get JSON api method
+# zcurlget <uid_path> <method> <data>
+# uses ZENBASE, ZAPIUSER, and ZAPIPASS variables
+#=============================================================================
+
+sub zcurlget {
+    my ($UIDPATH,$ROUTER_METHOD,$DATA) = @_;
+
+    $UIDPATH=~s/\ /%20/g;
+
+    #zenoss5 runs under a self signed SSL cert (https) by default;
+    #so unless you have installed a real cert, ignore the warning
+    my $ins;
+    if ($ZENBASE =~ /^https/) {
+        $ins=" --insecure "; #
+    }
+
+    my $cmd = qq(curl $ins -s -u "$ZAPIUSER:$ZAPIPASS" "${ZENBASE}${UIDPATH}/${ROUTER_METHOD}?${DATA}");
+    return qx($cmd);
+}
 
 #=============================================================================
 # Function CATCHERRORS
@@ -233,3 +262,13 @@ sub get_valid_values {
 #$priovalue{'1'}='Lowest';
 #$priovalue{'0'}='Trivial';
 
+#=============================================================================
+# Function RENAMEHOST
+# renames a host $hostpath to new name $newname
+#=============================================================================
+sub renamehost {
+    my ($newname,$hostpath) = @_;
+
+    my $output=&zapi_toolkit::zcurlget($hostpath,"renameDevice","newId=$newname");
+    return $output;
+}
