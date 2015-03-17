@@ -1,0 +1,37 @@
+#!/usr/bin/perl
+
+#=============================================================================
+# json_manipulate_event
+# Manipulate an existing event in the zenoss event console
+#=============================================================================
+
+sub usage {
+    print "$0: Manipulate an existing event in the zenoss event console\n";
+    print "Usage: $0 task eventid\n";
+    print "where task is 'close', 'reopen', 'acknowledge', 'unacknowledge', 'detail' \n";
+    exit;
+}
+
+use JSON::Parse ':all';
+use Data::Dumper;
+require 'zapi_toolkit.pl';
+
+$debug=0;
+$debugold=0;
+
+my $task=shift;
+my $evid=shift;
+
+unless ($task =~ /^(close|reopen|acknowledge|unacknowledge|detail)$/) {
+    &usage;
+}
+
+unless ($evid) {
+    &usage;
+}
+
+print "*** $task, $evid\n" if ($debug);
+
+my $output = &zapi_toolkit::manip_event($task, $evid);
+
+exit;

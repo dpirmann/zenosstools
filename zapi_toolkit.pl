@@ -360,3 +360,51 @@ sub parsecprop {
     }
     return %aar;
 }
+
+#=============================================================================
+# Function MANIP_EVENT
+# Takes an event id and action and uses curlpost to hit the eventsrouter
+# manip_event <task> <eventid>
+# where task is 'close', 'reopen', 'acknowledge', 'unacknowledge'
+#=============================================================================
+sub manip_event {
+    my ($task, $evid) = @_;
+
+    die unless ($task =~ /^(close|reopen|acknowledge|unacknowledge|detail)$/);
+
+    if ($evid =~ /\/evid:/) {
+	$evid =~ s/\/evid:\s*//;
+    }
+
+    my $data;
+
+    if ($task eq 'detail') {
+	$data=qq({"evid":"$evid"});
+    } else {
+	$data=qq({"evids":["$evid"]});
+    }
+
+    my $output = &zapi_toolkit::zcurlpost("evconsole_router","EventsRouter","$task",$data);
+
+    my $parsed= parse_json($output);
+
+    if ($task eq 'detail') {
+	%keyarray=&zapi_toolkit::recurseParse("",$parsed->{result}->{event}[0],%keyarray);
+	foreach (sort keys %keyarray) {
+	    print "$_ : $keyarray{$_}\n";
+	}
+
+    } else {
+        if (%$parsed->{'result'}->{'data'}->{'updated'} < 1) {
+	    print STDERR "No events modified.... maybe incorrect evid or already in state specified\n";
+	    exit;
+	} else {
+	    if (%$parsed->{'result'}->{'success'}) {
+		print STDERR "Success\n";
+	    } else {
+		print STDERR "Failure\n";
+	    }
+	}
+    }
+}
+
