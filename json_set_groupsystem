@@ -1,0 +1,92 @@
+#!/usr/bin/perl
+
+#=============================================================================
+# json_set_groupsystem
+#=============================================================================
+
+sub usage {
+    print "$0: Add a host to an existing group or system category\n";
+    print "Usage: $0 {group|system}=name hostname [hostname....]\n";
+    print "If 'name' = 'list' then print out the available groups/systems and exit\n";
+    exit;
+}
+
+use JSON::Parse ':all';
+use Data::Dumper;
+require 'zapi_toolkit.pl';
+
+$debug=0;
+$debugold=0;
+
+my $task=shift;
+my ($cat,$name) = split ('=',$task);
+
+unless ($cat =~ /(group|system)/) {
+    &usage;
+}
+
+my $method;
+if ($cat eq 'group') {
+    $method="getGroups";
+} elsif ($cat eq 'system') {
+    $method="getSystems";
+} else {
+    &usage;
+}
+
+#first retrieve list of valid names for $cat
+
+my $output = &zapi_toolkit::zcurlpost("device_router","DeviceRouter","$method",'{}');
+my $parsed= parse_json($output);
+my %catarry=parse_cat($cat,$parsed);
+
+if ($name eq "list") {
+    foreach my $x (sort keys %catarry) {
+	print "$x\n";
+    }
+    exit;
+}
+
+if (exists $catarry{$name}) {
+    print "Selected $cat name $name exists... proceeding\n\n" if ($debug);
+} else {
+    print "Selected $cat name $name DOES NOT EXIST\n";
+    exit;
+}
+
+
+$method=~s/get//; #getSystems -> Systems etc.
+while (my $host=shift) {
+
+    print "Setting host $host to $cat $name\n"  if ($debug);
+
+    my $hostpath=&zapi_toolkit::gethostuid($host);
+    unless ($hostpath =~ m|/zport/dmd/|) {
+	print "Host $host not found\n";
+	next;
+    } 	
+
+    print "Host $host found at $hostpath, proceeding\n\n"  if ($debug);
+    my $data=qq({"uids":["$hostpath"],"ranges":[],"target":"/zport/dmd/${method}${name}","asynchronous":false});
+    my $output = &zapi_toolkit::zcurlpost("device_router","DeviceRouter","moveDevices",$data);
+
+}
+
+
+exit;
+
+
+sub parse_cat {
+    my ($cat, $parsed) = @_;
+    my %catarry;
+    my $total = %$parsed->{'result'}->{'totalCount'};
+    $cat=$cat . 's'; #group -> groups etc.
+    for (my $i=0;$i<$total;$i++) {
+	my $nname=%$parsed->{'result'}->{$cat}[$i]->{'name'};
+	$catarry{$nname}++;
+    }
+    return %catarry;
+}
+
+
+
