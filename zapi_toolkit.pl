@@ -142,7 +142,7 @@ sub gethostuid {
     #In order to figure out which we have, we'll convert the value to 
     #decimal and back to dotted - if there's a match it was an IP address.
     my $param; 
-    if ($val eq zapi_toolkit::dec2ip(zapi_toolkit::ip2dec($val))) {
+    if ($val eq &zapi_toolkit::dec2ip(&zapi_toolkit::ip2dec($val))) {
 	print STDERR "GETHOSTUID Found IP $val\n" if ($debugsub);
 	$param= qq("ipAddress":"$val");
     } else {
@@ -197,11 +197,12 @@ sub ip2dec ($) { unpack N => pack CCCC => split /\./ => shift; }
 #=============================================================================
 # sub getCollectorList
 # return an array of valid collector names
+# should be combined into get_valid_values?
 #=============================================================================
 sub getCollectorList {
     my @collectors;
     my $data=qq({});
-    my $output = ZenossPerl::zcurlpost("device_router","DeviceRouter","getCollectors",$data);
+    my $output = &zapi_toolkit::zcurlpost("device_router","DeviceRouter","getCollectors",$data);
     my $parsed= parse_json($output);
     my $ct=@{%$parsed->{'result'}}; #number of groups
     for (my $gn=0;$gn<$ct;$gn++) {
@@ -217,8 +218,8 @@ sub getCollectorList {
 sub get_valid_values {
     my ($type) = @_;
 
-    die "Type must be one of getProductionStates|getPriorities|getDeviceClasses\n"
-	unless ($type =~ /^(getProductionStates|getPriorities|getDeviceClasses)$/);
+    die "Type must be one of getProductionStates|getPriorities|getDeviceClasses|getGroups|getSystems\n"
+	unless ($type =~ /^(getProductionStates|getPriorities|getDeviceClasses|getGroups|getSystems)$/);
 
 #these two come back with name/value pairs
 #   perl json_wrapper post "device_router" "DeviceRouter" "getProductionStates" "{}"
@@ -226,15 +227,20 @@ sub get_valid_values {
     
 #this one just names names
 #   perl json_wrapper post "device_router" "DeviceRouter" "getDeviceClasses" "{}"
+#   perl json_wrapper post "device_router" "DeviceRouter" "getGroups" "{}"
+#   perl json_wrapper post "device_router" "DeviceRouter" "getSystems" "{}"
 
     my $resfield;
     if ($type =~ /^(getProductionStates|getPriorities)$/) {
 	$resfield='data';
-    } else {
+    } elsif ($type eq "getDeviceClasses") {
 	$resfield='deviceClasses';
+    } elsif ($type eq "getGroups") {
+	$resfield='groups';
+    } elsif ($type eq "getSystems") {
+	$resfield='systems';
     }
-
-    my $output = zapi_toolkit::zcurlpost("device_router","DeviceRouter","$type");
+    my $output = &zapi_toolkit::zcurlpost("device_router","DeviceRouter","$type");
     my $parsed= parse_json($output);
     my $total=@{%$parsed->{'result'}->{$resfield}};
 
@@ -289,11 +295,11 @@ sub getinfokey {
     my $output = zcurlpost("device_router","DeviceRouter","getInfo",$data);
     my $parsed= parse_json($output);
 
-    %keyarray=zapi_toolkit::recurseParse("",$parsed->{result}->{data},%keyarray);
+    %keyarray=&zapi_toolkit::recurseParse("",$parsed->{result}->{data},%keyarray);
 
     #added this little bit to include a device's custom properties into the array
     my $output=&zapi_toolkit::zcurlget($hostpath,"deviceCustomEdit","");
-    %keyarray=zapi_toolkit::parsecprop($output,%keyarray);
+    %keyarray=&zapi_toolkit::parsecprop($output,%keyarray);
 
     return %keyarray;
 }
@@ -311,7 +317,7 @@ sub recurseParse {
     my ($name,$parsed,%keyarray) = @_;
     foreach (sort keys %$parsed) {
 	if (ref(%$parsed->{$_}) eq "HASH") {
-	    %keyarray=zapi_toolkit::recurseParse("$name/$_",$parsed->{$_},%keyarray);
+	    %keyarray=&zapi_toolkit::recurseParse("$name/$_",$parsed->{$_},%keyarray);
 	} elsif (ref(%$parsed->{$_}) eq "ARRAY") {
             # must figure out how many elements there are in the array, and then iterate 
 	    # this kind of sucks because the keys need to have the array index in them
@@ -319,7 +325,7 @@ sub recurseParse {
 	    my $ct=@{%$parsed->{$_}}; #number of groups
 	    for (my $gn=0;$gn<$ct;$gn++) {
 		if (ref(%$parsed->{$_}[$gn]) eq "HASH") {
-                    %keyarray=zapi_toolkit::recurseParse("$name/$gn/$_",$parsed->{$_}[$gn],%keyarray);
+                    %keyarray=&zapi_toolkit::recurseParse("$name/$gn/$_",$parsed->{$_}[$gn],%keyarray);
                 } else {
                     $keyarray{"$name/$_"}=$parsed->{$_}[$gn] . "," . $keyarray{"$name/$_"};
                 }

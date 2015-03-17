@@ -35,10 +35,7 @@ if ($cat eq 'group') {
 }
 
 #first retrieve list of valid names for $cat
-
-my $output = &zapi_toolkit::zcurlpost("device_router","DeviceRouter","$method",'{}');
-my $parsed= parse_json($output);
-my %catarry=parse_cat($cat,$parsed);
+my %catarry=&zapi_toolkit::get_valid_values($method);
 
 if ($name eq "list") {
     foreach my $x (sort keys %catarry) {
@@ -74,19 +71,6 @@ while (my $host=shift) {
 
 
 exit;
-
-
-sub parse_cat {
-    my ($cat, $parsed) = @_;
-    my %catarry;
-    my $total = %$parsed->{'result'}->{'totalCount'};
-    $cat=$cat . 's'; #group -> groups etc.
-    for (my $i=0;$i<$total;$i++) {
-	my $nname=%$parsed->{'result'}->{$cat}[$i]->{'name'};
-	$catarry{$nname}++;
-    }
-    return %catarry;
-}
 
 
 
