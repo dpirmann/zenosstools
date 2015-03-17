@@ -1,0 +1,33 @@
+#!/usr/bin/perl
+
+#=============================================================================
+# json_get_components
+# quick and dirty dump of a device's components... may be useful
+#=============================================================================
+
+my $debug=0;
+my $debugold=0;
+
+my $host=shift;
+
+require 'zapi_toolkit.pl';
+
+unless ($host) {
+    print "Usage: $0 hostname-or-ip\n";
+    print "where hostname or ip must match exactly a device in Zenoss\n";
+    exit;
+}
+
+#find out the /zport/dmd/host/path for the given host argument
+my $hostpath=&zapi_toolkit::gethostuid($host);
+unless ($hostpath =~ m|/zport/dmd|) {
+    print "Host not found.\n";
+}
+
+my $data = qq({"uid":"$hostpath"});
+my $output = &zapi_toolkit::zcurlpost("device_router","DeviceRouter","getComponents",$data);
+my $parsed= parse_json($output);
+print Dumper($parsed);    
+
+exit;
+
