@@ -1,0 +1,95 @@
+#!/usr/bin/perl
+
+#=============================================================================
+# json_set_prodstate
+#=============================================================================
+
+sub usage {
+    print "$0: Change a host's prod state or priority in Zenoss\n";
+    print "Usage: $0 [prodstate|priority]=value [hostname or ip....list]\n";
+    print "       $0 [prodstate|priority]=list (lists available values)\n";
+    print "Note: to see existing prodstates and priorities, use json_get_info\n";
+    print "       perl json_get_info hostname /priorityLabel\n";
+    print "       perl json_get_info hostname /productionStateLabel\n";
+}
+
+use JSON::Parse ':all';
+use Data::Dumper;
+require 'zapi_toolkit.pl';
+
+$debug=0;
+$debugold=0;
+
+my $action; my $value; my @hostarray;my $zaction;
+
+while (my $option=shift) {
+    if ($option =~ /^(prodstate|priority)=/i) {
+	($action, $value) = split (/=/, $option);
+    } else {
+	push @hostarray, $option;
+    }
+}
+
+print "Action = $action\n" if ($debug);
+print "Value  = $value\n" if ($debug);
+
+if ($action =~ /^prodstate$/i) {
+    $zaction='getProductionStates';
+} elsif ($action =~ /^priority$/i) {
+    $zaction='getPriorities';
+} else {
+    &usage;
+    die "Oops. Needs action of prodstate or priority\n";
+}
+
+my %valarry=&zapi_toolkit::get_valid_values($zaction);
+
+if ($value =~ /^list$/i) {
+    print "Valid values for action $action:\n";
+    foreach $x (sort keys %valarry) {
+	print "\t$x ($valarry{$x})\n";
+    }
+    exit;
+}
+
+unless ($action && $value && (scalar @hostarray>0)) {
+    &usage;
+    die "Don't seem to have all the necessary arguments.\n";
+}
+
+foreach my $host (sort @hostarray) {
+
+    #find out the /zport/dmd/host/path for the given host argument
+    my $hostpath=zapi_toolkit::gethostuid($host);
+    unless ($hostpath=~ m|/zport/dmd|) {
+	print "Address $host not in Zenoss.\n";
+	next;
+    }
+
+    &update_value($zaction,$hostpath,$valarry{$value});
+}
+
+
+sub update_value {
+    my ($zaction,$uid,$value) = @_;
+
+    $zaction='productionState' if ($zaction eq "getProductionStates");
+    $zaction='priority' if ($zaction eq "getPriorities");
+
+#the docs show a setPriority and setProdstate JSON API call but setInfo seems to do the trick
+
+    my $data = qq({"uid":"$uid","$zaction":$value});
+    my $output = zapi_toolkit::zcurlpost("device_router","DeviceRouter","setInfo", $data);
+    print "$output\n";
+}
+
+
+exit;
+
+
+
+
+
+
+
+
