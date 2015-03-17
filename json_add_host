@@ -1,0 +1,46 @@
+#!/usr/bin/perl
+
+#=============================================================================
+# json_add_host
+#=============================================================================
+
+sub usage {
+    print "$0: Add a host to Zenoss\n";
+    print "Usage: $0 hostname managedIP hostclass\n";
+    exit;
+}
+
+use JSON::Parse ':all';
+use Data::Dumper;
+
+require 'zapi_toolkit.pl';
+
+$debug=0;
+$debugold=0;
+
+$deviceName=shift;
+$manageIp=shift;
+$deviceClass=shift;
+
+unless ($deviceName && $deviceClass && $manageIp) {
+    &usage;
+    die "Don't seem to have all the necessary arguments.\n";
+}
+
+#find out the /zport/dmd/host/path for the given host argument
+my $hostpath=&zapi_toolkit::gethostuid($manageIp);
+if ($hostpath=~ m|/zport/dmd|) {
+    die "Address $manageIp already in Zenoss.\n";
+}
+
+my $hostpath=zapi_toolkit::gethostuid($deviceName);
+if ($hostpath=~ m|/zport/dmd|) {
+    die "deviceName $deviceName already in Zenoss.\n";
+}
+
+my $data=qq({"deviceName":"$deviceName","deviceClass":"$deviceClass","manageIp":"$manageIp","model":true});
+my $output=&zapi_toolkit::zcurlpost("device_router","DeviceRouter","addDevice",$data);
+my $success=&zapi_toolkit::catchJsonErrors($output);
+
+
+exit;
