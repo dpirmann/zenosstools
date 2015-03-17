@@ -1,0 +1,52 @@
+#!/usr/bin/perl
+
+#=============================================================================
+# json_get_info
+# given a HOSTNAME (or IP) and a key, print it's value
+# e.g.
+# json_get_info HOSTNAME /uptime
+# or leave the key off for a dump of all the key/values
+#=============================================================================
+
+sub usage {
+    print "Usage: $0 hostname-or-ip whatinfo\n";
+    print "where hostname or ip must match exactly a device in Zenoss\n";
+    print "and whatinfo is some key like snmpSysName you want about that device\n";
+    exit;
+}
+
+require 'zapi_toolkit.pl';
+
+my $debug=1;
+my $debugold=0;
+
+my $host=shift;
+my $whatinfo=shift;
+
+&usage unless ($host);
+
+#find out the /zport/dmd/host/path for the given host argument
+my $hostpath=zapi_toolkit::gethostuid($host);
+print "$hostpath\n" if ($debug);
+
+unless ($hostpath =~ m|/zport/dmd|) {
+    die "Host not found in Zenoss.\n";
+}
+
+#look up whatinfo against hostpath
+#getinfo checks for errors before processing its json to return us the value
+my %aar=&zapi_toolkit::getinfokey($hostpath);
+
+if ($whatinfo) {
+    my $myinfo=$aar{$whatinfo};
+    if ($myinfo) {
+	print "$myinfo\n";
+    }
+} else {
+    foreach (sort keys %aar) {
+	print "$_ : $aar{$_}\n";
+    }
+}
+
+exit;
+
