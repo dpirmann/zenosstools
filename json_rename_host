@@ -1,0 +1,39 @@
+#!/usr/bin/perl
+
+#=============================================================================
+# json_rename_host
+#
+# Given an ipaddress or hostname, that matches exactly a single device in Zenoss,
+# and a new hostname, rename the device to match the new hostname
+# (no modification is done to new hostname at this point... no upper casing, etc)
+#=============================================================================
+
+my $debug=0;
+my $debugold=0;
+
+my $host=shift;
+my $newname=shift;
+
+require 'zapi_toolkit.pl';
+
+unless ($host && $newname) {
+    print "Usage: $0 hostname-or-ip newname\n";
+    print "where newname must not already exist in zenoss\n";
+    print "and hostname or ip must match exactly a device in Zenoss\n";
+    exit;
+}
+
+#find out the /zport/dmd/host/path for the given host argument
+my $hostpath=ZenossPerl::gethostuid($host);
+print "$hostpath\n" if ($debug);
+
+unless ($hostpath =~ m|/zport/dmd|) {
+    die "Host not found in Zenoss.\n";
+}
+
+#call renamehost with newname and hostpath, print errors...
+$output=&zapi_toolkit::renamehost ($newname,$hostpath));
+&zapi_toolkit::catchErrors($output);
+
+exit;
+
