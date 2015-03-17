@@ -1,0 +1,69 @@
+#!/usr/bin/perl
+
+#=============================================================================
+# json_get_host_osprocess
+#=============================================================================
+
+sub usage {
+    print "$0 [-c] hostname [hostname...]\n";
+    print "Given a list of HOSTNAMES (or IP), list out the os processes modeled on this device";
+    print "Option -c for csv output\n";
+    exit;
+}
+
+use JSON::Parse ':all';
+use Getopt::Std;
+
+require 'zapi_toolkit.pl';
+my $global_get_devices_limit=3000;
+
+my $debug=0;
+my $myname=shift;
+
+getopts('ch',\%opts);
+if (defined $opts{'h'}) {
+    &usage;
+}
+
+my $data=qq({"params":{"meta_type":"OsProcessClass"}});
+my $output = &zapi_toolkit::zcurlpost("process_router","ProcessRouter","query",$data);
+my $parsed= parse_json($output);
+my $total=@{%$parsed->{'result'}->{'processes'}};
+
+for (my $i=0;$i<$total;$i++) {
+    my $puid=%$parsed->{'result'}->{'processes'}[$i]->{'uid'};
+    my $pnam=%$parsed->{'result'}->{'processes'}[$i]->{'name'};
+    if ($pnam eq $myname) {
+	&printProcesses($puid);
+    }
+}
+
+sub printProcesses {
+    my ($uid) = @_;
+
+    my $data=qq({"uid":"$uid","limit":$global_get_devices_limit});
+    my $output = &zapi_toolkit::zcurlpost("process_router","ProcessRouter","getInstances",$data);
+    my $parsed= parse_json($output);
+    my $total=@{%$parsed->{'result'}->{'data'}};
+    
+    for (my $i=0;$i<$total;$i++) {
+	my $pdev=%$parsed->{'result'}->{'data'}[$i]->{'device'}->{'name'};
+	my $pnam=%$parsed->{'result'}->{'data'}[$i]->{'name'};
+	my $pstt=%$parsed->{'result'}->{'data'}[$i]->{'pingStatus'};
+	my $pm=%$parsed->{'result'}->{'data'}[$i]->{'monitored'};
+	if($pm) {$pm="Yes"; } else {$pm="No";}
+	
+	if (defined $opts{'c'}) {
+	    print "$pdev,$pnam,$pstt,$pm\n";
+	} else {
+	    printf "%-20.20s %-50.50s %-8.8s %-10.10s\n", $pdev, $pnam, $pstt, $pm;
+	}
+    }
+    exit;
+}
+
+
+
+
+exit;
+
