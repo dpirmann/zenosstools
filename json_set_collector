@@ -21,6 +21,13 @@ my $newcollector=shift;
 
 #figure out if $newcollector is a collector....
 my @collectors=&zapi_toolkit::getCollectorList;
+
+if ($newcollector eq "list") {
+    print join "\n", @collectors;
+    print "\n";
+    exit;
+}
+
 unless (grep (/^${newcollector}$/, @collectors)) {
     print "No such collector '$newcollector' found in Zenoss.\n";
     exit;
@@ -28,16 +35,15 @@ unless (grep (/^${newcollector}$/, @collectors)) {
 
 while (my $host=shift) {
     my $hostpath=&zapi_toolkit::gethostuid($host);
-    if ($hostpath =~ m|/zport/dmd/|) {
-	print "Host $host found at $hostpath, proceeding\n\n"  if ($debug);
-
-	my $data=qq({"uids":["$hostpath"],"hashcheck":"","collector":"$newcollector","moveData":true});
-	my $output = zapi_toolkit::zcurlpost("device_router","DeviceRouter","setCollector",$data);
-	my $success=&zapi_toolkit::catchJsonErrors($output); #prints err if there is one, otherwise silent
-	
-    } else {
+    unless ($hostpath =~ m|/zport/dmd/|) {
 	print STDERR "Host $host not found.\n";
     }
+
+    print "Host $host found at $hostpath, proceeding\n\n"  if ($debug);
+
+    my $data=qq({"uids":["$hostpath"],"hashcheck":"","collector":"$newcollector","moveData":true});
+    my $output = &zapi_toolkit::zcurlpost("device_router","DeviceRouter","setCollector",$data);
+    my $success=&zapi_toolkit::catchJsonErrors($output); #prints err if there is one, otherwise silent
 }
 
 exit;
