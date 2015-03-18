@@ -2,19 +2,24 @@
 
 #=============================================================================
 # json_get_info
-# given a HOSTNAME (or IP) and a key, print it's value
-# e.g.
-# json_get_info HOSTNAME /uptime
-# or leave the key off for a dump of all the key/values
+#
+# By David Pirmann. This script is an interface to the JSON API exposed by the
+# "Zenoss Core" product from www.zenoss.org. This script requires "zapi_toolkit" 
+# from https://github.com/dpirmann/zenosstools
+# See README and the project WIKI on above GITHUB site for more details.
+#
+# This script is hereby released under GNU General Public License version 2
+# See http://www.gnu.org/licenses/gpl-2.0.html for details.
 #=============================================================================
 
 sub usage {
-    print "Usage: $0 hostname-or-ip whatinfo\n";
-    print "where hostname or ip must match exactly a device in Zenoss\n";
-    print "and whatinfo is some key like snmpSysName you want about that device\n";
+    print "Usage: $0 hostname-or-ip [whatinfo]\n";
+    print "where hostname or ip must match exactly a device in Zenoss.\n";
+    print "Whatinfo is some key like snmpSysName you want about that device\n";
     exit;
 }
 
+use JSON::Parse ':all';
 require 'zapi_toolkit.pl';
 
 my $debug=1;

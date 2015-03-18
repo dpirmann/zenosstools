@@ -1,9 +1,19 @@
 #!/usr/bin/perl
 
 #=============================================================================
+# json_compare_sysnames
+#
+# By David Pirmann. This script is an interface to the JSON API exposed by the
+# "Zenoss Core" product from www.zenoss.org. This script requires "zapi_toolkit" 
+# from https://github.com/dpirmann/zenosstools
+# See README and the project WIKI on above GITHUB site for more details.
+#
+# This script is hereby released under GNU General Public License version 2
+# See http://www.gnu.org/licenses/gpl-2.0.html for details.
+#=============================================================================
+
 # compare the zenoss device "snmpsysname" to the device's id and name fields
 # (case insensitive)
-#=============================================================================
 
 use JSON::Parse ':all';
 use Data::Dumper;
@@ -15,7 +25,7 @@ $debug=1;
 $debugold=1;
 
 my $DATA=qq({"keys":["snmpSysName","name","id"],"limit":$global_get_devices_limit});
-my $output = zapi_toolkit::zcurlpost("device_router","DeviceRouter","getDevices",$DATA);
+my $output = &zapi_toolkit::zcurlpost("device_router","DeviceRouter","getDevices",$DATA);
 my $parsed= parse_json($output);
 my $total=@{%$parsed->{'result'}->{'devices'}};
 	    

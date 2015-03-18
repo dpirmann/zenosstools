@@ -2,8 +2,17 @@
 
 #=============================================================================
 # json_add_host
+#
+# By David Pirmann. This script is an interface to the JSON API exposed by the
+# "Zenoss Core" product from www.zenoss.org. This script requires "zapi_toolkit" 
+# from https://github.com/dpirmann/zenosstools
+# See README and the project WIKI on above GITHUB site for more details.
+#
+# This script is hereby released under GNU General Public License version 2
+# See http://www.gnu.org/licenses/gpl-2.0.html for details.
 #=============================================================================
 
+#=============================================================================
 sub usage {
     print "$0: Add a host to Zenoss\n";
     print "Usage: $0 hostname managedIP hostclass\n";
@@ -11,8 +20,6 @@ sub usage {
 }
 
 use JSON::Parse ':all';
-use Data::Dumper;
-
 require 'zapi_toolkit.pl';
 
 $debug=0;
@@ -22,10 +29,7 @@ $deviceName=shift;
 $manageIp=shift;
 $deviceClass=shift;
 
-unless ($deviceName && $deviceClass && $manageIp) {
-    &usage;
-    die "Don't seem to have all the necessary arguments.\n";
-}
+&usage unless ($deviceName && $deviceClass && $manageIp);
 
 #find out the /zport/dmd/host/path for the given host argument
 my $hostpath=&zapi_toolkit::gethostuid($manageIp);

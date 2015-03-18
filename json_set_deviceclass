@@ -2,8 +2,17 @@
 
 #=============================================================================
 # json_set_deviceclass
+#
+# By David Pirmann. This script is an interface to the JSON API exposed by the
+# "Zenoss Core" product from www.zenoss.org. This script requires "zapi_toolkit" 
+# from https://github.com/dpirmann/zenosstools
+# See README and the project WIKI on above GITHUB site for more details.
+#
+# This script is hereby released under GNU General Public License version 2
+# See http://www.gnu.org/licenses/gpl-2.0.html for details.
 #=============================================================================
 
+#=============================================================================
 sub usage {
     print "$0: Change a host's device class\n";
     print "Usage: $0 new_device_class [hostname or ip....list]\n";
@@ -11,9 +20,9 @@ sub usage {
     print " or you can use 'list' to see the valid device classes.\n";
     exit;
 }
+#=============================================================================
 
 use JSON::Parse ':all';
-use Data::Dumper;
 require 'zapi_toolkit.pl';
 
 $debug=0;

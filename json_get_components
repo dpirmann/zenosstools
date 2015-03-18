@@ -2,21 +2,32 @@
 
 #=============================================================================
 # json_get_components
-# quick and dirty dump of a device's components... may be useful
+#
+# By David Pirmann. This script is an interface to the JSON API exposed by the
+# "Zenoss Core" product from www.zenoss.org. This script requires "zapi_toolkit" 
+# from https://github.com/dpirmann/zenosstools
+# See README and the project WIKI on above GITHUB site for more details.
+#
+# This script is hereby released under GNU General Public License version 2
+# See http://www.gnu.org/licenses/gpl-2.0.html for details.
 #=============================================================================
+
+sub usage {
+    print "Quick and dirty dump of a device's components.\n";
+    print "Usage: $0 hostname-or-ip\n";
+    print "where hostname or ip must match exactly a device in Zenoss\n";
+    exit;
+}    
+
+use JSON::Parse ':all';
+require 'zapi_toolkit.pl';
 
 my $debug=0;
 my $debugold=0;
 
 my $host=shift;
 
-require 'zapi_toolkit.pl';
-
-unless ($host) {
-    print "Usage: $0 hostname-or-ip\n";
-    print "where hostname or ip must match exactly a device in Zenoss\n";
-    exit;
-}
+&usage unless ($host);
 
 #find out the /zport/dmd/host/path for the given host argument
 my $hostpath=&zapi_toolkit::gethostuid($host);

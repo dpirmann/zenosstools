@@ -2,6 +2,16 @@
 
 #=============================================================================
 # json_get_host_interfaces
+#
+# By David Pirmann. This script is an interface to the JSON API exposed by the
+# "Zenoss Core" product from www.zenoss.org. This script requires "zapi_toolkit" 
+# from https://github.com/dpirmann/zenosstools
+# See README and the project WIKI on above GITHUB site for more details.
+#
+# This script is hereby released under GNU General Public License version 2
+# See http://www.gnu.org/licenses/gpl-2.0.html for details.
+#=============================================================================
+
 #=============================================================================
 
 sub usage {
@@ -13,8 +23,8 @@ sub usage {
 
 use JSON::Parse ':all';
 use Getopt::Std;
-
 require 'zapi_toolkit.pl';
+
 my $global_get_devices_limit=3000;
 
 my $debug=0;

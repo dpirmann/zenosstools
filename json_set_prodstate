@@ -2,19 +2,35 @@
 
 #=============================================================================
 # json_set_prodstate
+#
+# By David Pirmann. This script is an interface to the JSON API exposed by the
+# "Zenoss Core" product from www.zenoss.org. This script requires "zapi_toolkit" 
+# from https://github.com/dpirmann/zenosstools
+# See README and the project WIKI on above GITHUB site for more details.
+#
+# This script is hereby released under GNU General Public License version 2
+# See http://www.gnu.org/licenses/gpl-2.0.html for details.
 #=============================================================================
 
+#=============================================================================
 sub usage {
-    print "$0: Change a host's prod state or priority in Zenoss\n";
-    print "Usage: $0 [prodstate|priority]=value [hostname or ip....list]\n";
-    print "       $0 [prodstate|priority]=list (lists available values)\n";
-    print "Note: to see existing prodstates and priorities, use json_get_info\n";
-    print "       perl json_get_info hostname /priorityLabel\n";
-    print "       perl json_get_info hostname /productionStateLabel\n";
+    print <<EFO;
+
+$0: Change a host\'s prod state or priority in Zenoss
+Usage: $0 [prodstate|priority]=value [hostname or ip....list]
+       $0 [prodstate|priority]=list (lists available values)
+
+Note: to see existing prodstates and priorities, use json_get_info
+      perl json_get_info hostname /priorityLabel
+      perl json_get_info hostname /productionStateLabel
+
+EFO
+exit;
+
 }
+#=============================================================================
 
 use JSON::Parse ':all';
-use Data::Dumper;
 require 'zapi_toolkit.pl';
 
 $debug=0;

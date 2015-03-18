@@ -1,5 +1,17 @@
 #!/usr/bin/perl
 
+#=============================================================================
+# zapi_toolkit.pl
+#
+# By David Pirmann. This script is an interface to the JSON API exposed by the
+# "Zenoss Core" product from www.zenoss.org. 
+# This script and others from https://github.com/dpirmann/zenosstools
+# See README and the project WIKI on above GITHUB site for more details.
+#
+# This script is hereby released under GNU General Public License version 2
+# See http://www.gnu.org/licenses/gpl-2.0.html for details.
+#=============================================================================
+
 #requirements - 
 # * unix utility "curl"
 # * Perl module JSON::Parse

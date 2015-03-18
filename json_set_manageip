@@ -1,17 +1,31 @@
 #!/usr/bin/perl
+
 #=============================================================================
 # json_set_manageip
+#
+# By David Pirmann. This script is an interface to the JSON API exposed by the
+# "Zenoss Core" product from www.zenoss.org. This script requires "zapi_toolkit" 
+# from https://github.com/dpirmann/zenosstools
+# See README and the project WIKI on above GITHUB site for more details.
+#
+# This script is hereby released under GNU General Public License version 2
+# See http://www.gnu.org/licenses/gpl-2.0.html for details.
 #=============================================================================
 
+#=============================================================================
 sub usage {
-    print "$0: Update the managed IP of an existing host\n";
-    print "Usage: $0 hostname new-ip\n";
-    exit;
+    print <<EFO;
+
+$0: Update the managed IP of an existing host.
+
+Usage: $0 hostname new-ip
+
+EFO
+
+exit;
 }
 
 use JSON::Parse ':all';
-use Data::Dumper;
-
 require 'zapi_toolkit.pl';
 
 $debug=0;
