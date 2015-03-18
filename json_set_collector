@@ -27,6 +27,7 @@ $debug=0;
 $debugold=0;
 
 my $newcollector=shift;
+&usage unless ($newcollector);
 
 #figure out if $newcollector is a collector....
 my @collectors=&zapi_toolkit::getCollectorList;
