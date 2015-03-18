@@ -41,11 +41,7 @@ sub zcurlpost {
     #all the quote marks inside the data string have to be escaped.
     #i do it here so that the methods that call zcurlpost are a little
     #easier to read
-
     $DATA=~s/\"/\\"/g;
-
-    #in the cmd there's those end of line escaped backslashes to make the command
-    #a little easier to read
 
     #zenoss5 runs under a self signed SSL cert (https) by default;
     #so unless you have installed a real cert, ignore the warning
@@ -54,6 +50,8 @@ sub zcurlpost {
         $ins=" --insecure "; #
     }
 
+    #in the cmd there's those end of line escaped backslashes to make the command
+    #a little easier to read
     my $cmd = qq(curl $ins -s -u "$ZAPIUSER:$ZAPIPASS" -X POST -H "Content-Type: application/json" \\
     -d "{\\"action\\":\\"$ROUTER_ACTION\\",\\"method\\":\\"$ROUTER_METHOD\\",\\"data\\":[$DATA], \\"tid\\":1}" \\
     "$ZENBASE/zport/dmd/$ROUTER_ENDPOINT");
@@ -97,7 +95,7 @@ sub catchErrors {
 
 #some types of plain text errors found here.
 #<input type="hidden" name="errorType" value="&lt;class 'Products.ZenModel.Exceptions.DeviceExistsError'&gt;" />
-#<input type="hidden" name="errorValue" value="Device already exists with id mfrplxmontest01" />
+#<input type="hidden" name="errorValue" value="Device already exists with id" />
 #'error_formatted': 'Traceback (most recent call last):\n  File "/opt/zenoss/lib/python/ZPublisher/Publish.py", line 11'
 
     my $errorType; my $errorValue; my $errorFormatted;
@@ -166,7 +164,7 @@ sub gethostuid {
     }
 
     my $data = qq({"params":{$param}});
-    my $output = zcurlpost("device_router","DeviceRouter","getDevices",$data);
+    my $output = &zapi_toolkit::zcurlpost("device_router","DeviceRouter","getDevices",$data);
     warn if &zapi_toolkit::catchErrors($output);
 
     my $parsed= parse_json($output);
@@ -307,7 +305,7 @@ sub getinfokey {
 
     #first part, getInfo
     my $data = qq({"uid":"$hostpath"});
-    my $output = zcurlpost("device_router","DeviceRouter","getInfo",$data);
+    my $output = &zapi_toolkit::zcurlpost("device_router","DeviceRouter","getInfo",$data);
     my $parsed= parse_json($output);
 
     %keyarray=&zapi_toolkit::recurseParse("",$parsed->{result}->{data},%keyarray);
@@ -324,12 +322,9 @@ sub getinfokey {
 #recursively traverses a json_parsed hash of hashes etc and returns
 #a %keyarray hash of key-value pairs
 #=============================================================================
-
 sub recurseParse {
-    my $subname=(caller(0))[3]; my $debugsub=1 if ($debuggy{$subname}==1);
-    logger("Entering $subname") if ($debugsub);
-
     my ($name,$parsed,%keyarray) = @_;
+
     foreach (sort keys %$parsed) {
 	if (ref(%$parsed->{$_}) eq "HASH") {
 	    %keyarray=&zapi_toolkit::recurseParse("$name/$_",$parsed->{$_},%keyarray);
