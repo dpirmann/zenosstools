@@ -1,0 +1,182 @@
+#!/usr/bin/perl
+
+#=============================================================================
+# json_list_events
+#
+# By David Pirmann. This script is an interface to the JSON API exposed by the
+# "Zenoss Core" product from www.zenoss.org. This script requires "zapi_toolkit" 
+# from https://github.com/dpirmann/zenosstools
+# See README and the project WIKI on above GITHUB site for more details.
+#
+# This script is hereby released under GNU General Public License version 2
+# See http://www.gnu.org/licenses/gpl-2.0.html for details.
+#=============================================================================
+
+sub usage {
+    print <<EOF;
+$0: Lists events from the zenoss event console.
+Usage: $0 ...
+
+Arguments = 
+\tstate=[new,acknowledged,suppressed,closed,cleared,aged] (default=new)
+\tfields=[any available field] (default=a useful selection)
+\tsev=[5,4,3,2,1] (default=4)(minimum severity to print)
+\tprodState=[device prodstate] (default=Pre-Production)
+\tevclass=[some event class, e.g. /Status/Ping] (default=no filter)
+\tdeviceclass=[some device class] (default=no filter)
+\thost=[a hostname] (default=no filter)
+\tgroup=[a device group] (default=no filter)
+\tsystem=[a device system] (default=no filter)
+\thelp (this help)
+\tlistfields (list available event fields)
+\tprintjson=(yes|no) (default=no)
+EOF
+exit;
+
+}
+
+use JSON::Parse ':all';
+require 'zapi_toolkit.pl';
+
+$debug=0;
+$debugold=0;
+
+#define alert states - used to convert text to values
+my %alertstates;
+$alertstate{'new'}=0;
+$alertstate{'acknowledged'}=1;
+$alertstate{'suppressed'}=2;
+$alertstate{'closed'}=3;
+$alertstate{'cleared'}=4;
+$alertstate{'aged'}=6;
+
+my %prodstatearry=&zapi_toolkit::get_valid_values('getProductionStates');
+
+# set up values and their defaults 
+my %args;
+$args{'state'}='new';  
+$args{'fields'}="/firstTime,/count,/dedupid,/device/text,/count,/summary,/severity,/eventClass/text";
+$args{'sev'}='4';
+$args{'prodState'}='Pre-Production';
+
+# process the arguments
+while (my $arg=shift) {
+    &usage if ($arg eq 'help');
+    &listfields if ($arg eq 'listfields');
+    foreach my $x ('state','fields','sev','prodstate','evclass','deviceclass','host','group','system','help','printjson') {
+	if ($arg=~/^${x}=/) {
+	    ($args{$x}) = ($arg =~ /${x}=(.+)/); 
+	}
+    }
+}
+
+#set up a value for the prod state name
+if (defined $prodstatearry{$args{'prodstate'}}) { 
+    $args{'prodstateval'}= $prodstatearry{$args{'prodstate'}};
+}
+
+#figure out which alertstates we asked for by name and make a nice list
+my @astate;
+foreach $x (split(/,/,$args{'state'})) {
+    push @astate, $alertstate{$x};
+}
+my $astate=join(',',@astate);
+
+#process fields into an array and also make a hash with flags of what to print later
+my %pfields;
+my $fieldcount=0;
+foreach my $x (split(/,/,$args{'fields'})) {
+    $fieldcount++;
+    unless ($x =~ /^\//) { $x = "/" . $x; } #add leading /
+    $pfields{$x}++;
+}
+$fieldcount++ if (defined $pfields{'/all'});
+
+#---------------------------------------------------------------------------------
+
+
+my @data;
+push @data, qq("limit":1000);
+push @data, qq("params":{\"eventState\":[$astate]});
+my $data=join (',', @data); $data=qq({$data});
+my $output = &zapi_toolkit::zcurlpost("evconsole_router","EventsRouter","query",$data);
+my $parsed=parse_json($output);
+my $tt=@{%$parsed->{'result'}->{'events'}};
+
+my $hostpath;
+if (defined $args{'host'}) {
+    $hostpath=&zapi_toolkit::gethostuid($args{'host'});
+}
+
+for (my $ev=0;$ev<$tt;$ev++) {
+    my %ear=&zapi_toolkit::recurseParse("",$parsed->{result}->{events}[$ev],%ear);
+    if (defined $args{'sev'}) {
+	next unless ($ear{'/severity'}>=$args{'sev'});
+    }
+    if (defined $args{'prodstateval'}) {
+	next unless ($ear{'/details/zenoss.device.production_state'} >= $args{'prodstateval'});
+    }
+    if (defined $args{'evclass'}) {
+	next unless ($ear{'/eventClass/text'} eq $args{'evclass'});
+    }
+    if (defined $args{'deviceclass'}) {
+	my $tmp=$ear{'/details/zenoss.device.device_class'};
+	next unless ($args{'deviceclass'} =~ /$tmp/i);
+    }
+    if (defined $args{'host'}) {
+	next unless ($ear{'/device/uid'} eq $hostpath);
+    }
+    if (defined $args{'group'}) {
+	next unless ($ear{'/0/DeviceGroups/name'} eq $args{'group'}); #not ideal, using first available group
+    }
+    if (defined $args{'system'}) {
+	my $tmp=$ear{'/0/DeviceSystems/name'}; #not ideal, using 1st available system..
+	next unless ($args{'system'} =~ /$tmp/i);
+    }
+
+    if ($args{'printjson'}=~/yes/i) {
+	my @json;
+	if (defined $pfields{'/all'}) {
+	    foreach my $x (sort keys %ear) { $ear{$x}=~s/\\//g; push @json, qq("$x":"$ear{$x}"); }
+	} else {
+	    foreach my $x (sort keys %pfields) { next if ($x eq '/all'); $ear{$x}=~s/\\//g; push @json, qq("$x":"$ear{$x}"); }
+	}
+	print "{" . join(",",@json) . "}\n";
+    } else {
+	if (defined $pfields{'/all'}) {
+	    foreach my $x (sort keys %ear) { print qq($x: $ear{$x}\n); }
+	} else {
+	    foreach my $x (sort keys %pfields) { next if ($x eq '/all'); print qq($x: $ear{$x}\n); }
+	}
+	print "------------------------------------------------\n" if ($fieldcount>1);
+    }
+
+
+}
+
+
+
+sub listfields {
+    print <<EFO;
+Field names may include the following:
+
+/0/DeviceClass/name, /0/DeviceClass/uid, /0/DeviceGroups/name,
+/0/DeviceGroups/uid, /0/Location/name, /0/Location/uid,
+/0/Systems/name, /0/Systems/uid, /agent, /clearid, /component/text,
+/component/uid, /component/url, /component/uuid, /count, /dedupid,
+/details/current, /details/description, /details/deviceuuid,
+/details/grname, /details/how, /details/isManageIp, /details/manager,
+/details/max, /details/sclass, /details/uuid,
+/details/zenoss.device.device_class, /details/zenoss.device.groups,
+/details/zenoss.device.ip_address, /details/zenoss.device.location,
+/details/zenoss.device.priority,
+/details/zenoss.device.production_state,
+/details/zenoss.device.systems, /DeviceClass, /DeviceGroups,
+/DevicePriority, /device/text, /device/uid, /device/url, /device/uuid,
+/eventClassKey, /eventClassMapping, /eventClass/text, /eventClass/uid,
+/eventGroup, /eventKey, /eventState, /evid, /facility, /firstTime,
+/id, /ipAddress, /lastTime, /Location, /message, /monitor, /ntevid,
+/ownerid, /priority, /prodState, /severity, /stateChange, /summary,
+EFO
+exit;
+}
