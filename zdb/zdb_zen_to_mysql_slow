@@ -1,0 +1,193 @@
+#!/usr/bin/perl
+
+#=============================================================================
+# zdb_zen_to_mysql_slow
+#
+# By David Pirmann. This script is an interface to the JSON API exposed by the
+# "Zenoss Core" product from www.zenoss.org. This script requires "zapi_toolkit" 
+# from https://github.com/dpirmann/zenosstools
+# See README and the project WIKI on above GITHUB site for more details.
+#
+# This script is hereby released under GNU General Public License version 2
+# See http://www.gnu.org/licenses/gpl-2.0.html for details.
+#=============================================================================
+
+use JSON::Parse ':all';
+use Time::Local;
+use DBI;
+
+require 'zapi_toolkit.pl';
+
+#*****************************************
+#EDIT DATABASE NAME AND CREDENTIALS HERE
+#*****************************************
+my $source = "dbi:mysql:zenadminstuff:localhost";
+my $dbh = DBI->connect($source,'zenadminuser','pw') || warn;
+
+my $debug=0;
+my $debugold=0;
+ 
+my $dbupdated=time;
+
+&makedbcache($dbh); #slow
+exit;
+
+#=============================================================================
+#prime the mysql database with info from api getDevices
+#=============================================================================
+sub makedbcache {
+    my ($dbh) = @_;
+
+    #first figure out how many items we have in our zenoss...
+    my $output = &zapi_toolkit::zcurlpost("device_router","DeviceRouter","getDevices",'{"limit":1}');
+    my $parsed= parse_json($output);
+    my $total=%$parsed->{'result'}->{'totalCount'};
+    print "Total=$total\n" if ($debug);
+
+    #iterate over the devices $ll at a time, process some fields, shove it in our sql db
+    my $ll=20;
+    for (my $jj=0;$jj<$total;$jj=$jj+$ll) {
+
+	my $data=qq({"start":$jj,"limit":$ll,"keys":["uuid"]});
+	my $output = &zapi_toolkit::zcurlpost("device_router","DeviceRouter","getDevices",$data);
+	my $parsed= parse_json($output);
+	my $ltotal=@{%$parsed->{'result'}->{'devices'}};
+
+	print "This starts at block=$jj\n" if ($debug);
+
+	for (my $i=0;$i<$ltotal;$i++) {
+
+	    my %keyarry;
+	    #use the info from getDevices to prime the keyarry
+            %keyarry=&zapi_toolkit::recurseParse("",$parsed->{'result'}->{'devices'}[$i],%keyarry);
+
+	    #test if host is already in database...
+	    my $sql=qq(select count(*) from zendevices where uuid="$keyarry{'/uuid'}");
+	    my $sth = $dbh->prepare($sql) or die ("Can not prepare statement:<p>$DBI::errstr");
+            $sth->execute or warn ("Can not execute statement:<p>$DBI::errstr");
+	    my $count=$sth->fetchrow;
+
+	    next unless ($count>0); #not worth trying to double insert
+
+	    #but then, overwrite it from the data from getinfokey 
+	    %keyarry=&zapi_toolkit::getinfokey($keyarry{'/uid'});
+
+	    $keyarry{'/cpucount'} = &zapi_toolkit::getcpucount($keyarry{'/uid'});
+
+	    #all of these have to do with modeling and don't take into account any other types of changes
+	    foreach $x ('/lastChanged', '/lastCollected', '/firstSeen') {
+		if (exists ($keyarry{$x}) && $keyarry{$x} ne 'Not Modeled') {
+		    my ($yr,$mo,$dy,$hr,$mn,$sc) = ($keyarry{$x} =~ m|(\d\d\d\d)/(\d\d)/(\d\d) (\d\d):(\d\d):(\d\d)|);
+		    $keyarry{$x} = timelocal($sc,$mn,$hr,$dy,$mo-1,$yr);
+		} else {
+		    $keyarry{$x}=0;
+		}
+	    }
+
+	    $sql=qq(update zendevices set
+                    cpucount="$keyarry{'/cpucount'}",
+                    firstseen=$keyarry{'/firstSeen'},
+                    lastchanged=$keyarry{'/lastChanged'},
+                    lastcollected=$keyarry{'/lastCollected'},
+                    windomain="$keyarry{'/cWindowsDomainName:string'}",
+                    dnsfqdn="$keyarry{'/cDnsFQDN:string'}",
+                    dbupdated=$dbupdated
+                    where uuid="$keyarry{'/uuid'}");
+
+#	    print "$sql\n\n\n" if ($debugold);
+	    my $sth = $dbh->prepare($sql) or die ("Can not prepare statement:<p>$DBI::errstr");
+	    $sth->execute or warn ("Can not execute statement:<p>$DBI::errstr");
+
+	    &insertips($keyarry{'/uid'},$keyarry{'/name'},$dbupdated,$keyarry{'/ipAddressString'});
+	    &insertfs($keyarry{'/uid'},$keyarry{'/name'},$dbupdated,$keyarry{'/ipAddressString'});
+	}
+    }
+}
+
+sub insertips {
+    my ($hostpath,$hostname,$dbupdated,$managedIp) = @_;
+
+    my $data=qq({"uid":"$hostpath","keys":["ipAddresses"],"meta_type":"IpInterface","limit":2000});
+    my $output = &zapi_toolkit::zcurlpost("device_router","DeviceRouter","getComponents",$data);
+    my $parsed= parse_json($output);
+    my $total = %$parsed->{'result'}->{'totalCount'};
+
+    my %allifs;
+
+    $allifs{$managedIp}="Managed IP Address";
+
+    for (my $i=0;$i<$total;$i++) {
+        my $uid=%$parsed->{'result'}->{'data'}[$i]->{'uid'};
+        $uid=~ s|/zport.*interfaces/||;
+
+        my @foo=@{%$parsed->{'result'}->{'data'}[$i]->{'ipAddresses'}};
+        foreach my $x (@foo) {
+            $x = substr($x,0,index($x,'/'));
+            $allifs{$x}=$uid;
+        }
+    }
+
+    my $sql = qq(delete from zendevattr where type='ip' and hostname='$hostname');
+    my $sth = $dbh->prepare($sql) or die ("Can not prepare statement:<p>$DBI::errstr");
+    $sth->execute or warn ("Can not execute statement:<p>$DBI::errstr");
+
+    foreach $x (sort keys %allifs) {
+        next if ($x eq "127.0.0.1");
+        next if ($x eq "::1");
+        next if ($x =~ /fe80::/);
+
+        my $sql = qq(insert into zendevattr values ("ip","$hostname","$x","$allifs{$x}",$dbupdated));
+	print "IP $sql\n" if ($debug);
+        my $sth = $dbh->prepare($sql) or die ("Can not prepare statement:<p>$DBI::errstr");
+        $sth->execute or warn ("Can not execute statement:<p>$DBI::errstr");
+    }
+}
+
+
+sub insertfs {
+    my ($hostpath,$hostname,$dbupdated,$managedIp) = @_;
+
+    my $data=qq({"uid":"$hostpath","keys":["id","totalBytes","usedBytes"],"meta_type":"FileSystem","limit":2000});
+    my $output = &zapi_toolkit::zcurlpost("device_router","DeviceRouter","getComponents",$data);
+    my $parsed= parse_json($output);
+    my $total = %$parsed->{'result'}->{'totalCount'};
+
+    my %allfs;
+
+#       'totalBytes' => '143972626432',
+#       'id' => 'C__ Label_  Serial Number 84aa39c0',
+#       'usedBytes' => '90967322624'
+
+    my $fstotal=0;
+    for (my $i=0;$i<$total;$i++) {
+        my $id=%$parsed->{'result'}->{'data'}[$i]->{'id'};
+	my $tb=%$parsed->{'result'}->{'data'}[$i]->{'totalBytes'};
+	my $ub=%$parsed->{'result'}->{'data'}[$i]->{'usedBytes'};
+	
+	$id=~s/\s+/_/g; #remove whitespace from the names;
+	$tb=sprintf "%.2f", $tb/(1024**3); #convert to gigs
+	$ub=sprintf "%.2f", $ub/(1024**3); #convert to gigs
+	$fstotal=$fstotal+$tb;
+	
+	$allfs{$id}="$ub / $tb";
+    }
+
+    my $sql = qq(delete from zendevattr where type='fs' and hostname='$hostname');
+    my $sth = $dbh->prepare($sql) or die ("Can not prepare statement:<p>$DBI::errstr");
+    $sth->execute or warn ("Can not execute statement:<p>$DBI::errstr");
+
+    foreach $x (sort keys %allfs) {
+	#type,hostname,value,label,dbupdated
+        my $sql = qq(insert into zendevattr values ("fs","$hostname","$allfs{$x}","$x",$dbupdated));
+	print "FS $sql\n" if ($debug);
+        my $sth = $dbh->prepare($sql) or die ("Can not prepare statement:<p>$DBI::errstr");
+        $sth->execute or warn ("Can not execute statement:<p>$DBI::errstr");
+    }
+
+    my $sql = qq(update zendevices set fstotal=$fstotal where uid='$hostpath');
+    print "FS $sql\n" if ($debug);
+    my $sth = $dbh->prepare($sql) or die ("Can not prepare statement:<p>$DBI::errstr");
+    $sth->execute or warn ("Can not execute statement:<p>$DBI::errstr");
+
+}
+

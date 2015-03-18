@@ -1,0 +1,176 @@
+#!/usr/bin/perl
+
+#=============================================================================
+# json_list_hosts
+#
+# By David Pirmann. This script is an interface to the JSON API exposed by the
+# "Zenoss Core" product from www.zenoss.org. This script requires "zapi_toolkit" 
+# from https://github.com/dpirmann/zenosstools
+# See README and the project WIKI on above GITHUB site for more details.
+#
+# This script is hereby released under GNU General Public License version 2
+# See http://www.gnu.org/licenses/gpl-2.0.html for details.
+#=============================================================================
+
+sub usage {
+    print <<EOF;
+$0: Lists hosts from the zenoss system.
+Usage: $0 ...
+Arguments = 
+    location=zenoss Location
+             (default=not limited by location)
+    system=zenoss System
+             (default=not limited by system)
+    group=zenoss Group
+             (default=not limited by group)
+    class=zenoss Device Class
+             (default=\/Server)
+    print=[hlsgci] (host, location, system, group, class, ipaddr)
+             (default=h)
+    sel=comma,list,of,zendevices,fields
+             (e.g. name,ipa,snmpcomm,cpucount)	     
+    showfields=list the fields available for sel	     
+EOF
+
+    exit;
+}
+
+#=============================================================================
+
+use JSON::Parse ':all';
+use DBI;
+
+require 'zapi_toolkit.pl';
+
+my $debug=0;
+my $debugold=0;
+
+#*****************************************
+#EDIT DATABASE NAME AND CREDENTIALS HERE
+#*****************************************
+my $source = "dbi:mysql:zenadminstuff:localhost";
+my $dbh = DBI->connect($source,'zenadminuser','pw') || warn;
+
+#=============================================================================
+#look up existing Prodstate and Priority values/names
+#=============================================================================
+my %prodstatearry=&zapi_toolkit::get_valid_values('getProductionStates');
+my %prioarry=&zapi_toolkit::get_valid_values('getPriorities');
+
+#=============================================================================
+#process arguments and set defaults as described in usage
+#=============================================================================
+my $class="/Server"; my $group; my $system; my $location; my $print; my $sel; my $showfields;
+
+while (my $arg=shift) {
+    if ($arg=~/^class=/) {
+	($class) = ($arg =~ /class=(.+)/);
+    }
+    if ($arg=~/^group=/) {
+	($group) = ($arg =~ /group=(.+)/);
+    }
+    if ($arg=~/^system=/) {
+	($system) = ($arg =~ /system=(.+)/);
+    }
+    if ($arg=~/^location=/) {
+	($location) = ($arg =~ /location=(.+)/);
+    }
+    if ($arg=~/^print=/) {
+	($print) = ($arg =~ /print=(.+)/);
+    }
+    if ($arg=~/^sel=/) {
+	($sel) = ($arg =~ /sel=(.+)/);
+    }
+    if ($arg=~/^showfields/) {
+	$showfields=1;
+    }
+    if ($arg=~/^help/) {
+	&usage;
+    }
+}
+
+if ($sel && $print) {
+    die "Can't specify both 'sel' and 'print' fields\n";
+}
+
+#=============================================================================
+#handle our search options and create where clause
+#=============================================================================
+my @where; my $where;
+if ($location) { push @where, qq(location="$location"); }
+if ($group) { push @where, qq(groups like "%|${group}|%"); }
+if ($system) { push @where, qq(systems like "%|${system}|%"); }
+if ($class) { push @where, qq(deviceclass like "%${class}%"); }
+
+$where="where " . join (' and ', @where) if (@where>0);
+
+if ($debugold) {
+    print "where=$where\n";
+}
+
+#=============================================================================
+#figure out which fields to print
+#=============================================================================
+
+my @tmpfields;
+if ($sel) { #sel field is a list of column names, process into an array
+    @tmpfields=split(/,/, $sel);
+} elsif ($print) { #print field is a list of keys (old style), substitute them into field names
+                   #e.g. hic should now look like name,ipa,deviceclass
+    $print=~ s/h/,name,/;
+    $print=~ s/l/,location,/;
+    $print=~ s/s/,systems,/;
+    $print=~ s/g/,groups,/;
+    $print=~ s/c/,deviceclass,/;
+    $print=~ s/i/,ipa,/;
+    $print=~ s/^,//g;
+    $print=~ s/,$//g;
+    $print=~ s/,,/,/g;
+    @tmpfields=split(/,/, $print);
+} else {
+    #no print or sel? fall through, defaults below:
+}
+
+unless (scalar @tmpfields > 0) { #(host)name will be the default
+    push @tmpfields, "name";
+}
+
+#select the column names from the table; we need to make sure we only ask for valid colnames
+my @colnames;
+my $sql = qq(SELECT column_name FROM information_schema.columns WHERE table_name='zendevices');
+my $sth = $dbh->prepare($sql) or die ("Can not prepare statement:<p>$DBI::errstr");
+$sth->execute or warn ("Can not execute statement:<p>$DBI::errstr");
+while (my $x=$sth->fetchrow) {
+    push @colnames, $x;
+}
+if ($showfields) {
+    print "Available fields:\n";
+    print join ",", @colnames;
+    print "\n";
+    exit;
+}
+
+#remove pfields that aren't in colnames
+my @pfields;
+foreach $x (@tmpfields) {
+    if (grep (/^${x}$/, @colnames)) {
+	push @pfields, $x;
+    }
+}
+
+#convert pfields into select field names
+my $select=join ",", @pfields;
+
+my $sql = qq(select $select from zendevices $where order by $select);
+my $sth = $dbh->prepare($sql) or die ("Can not prepare statement:<p>$DBI::errstr");
+$sth->execute or warn ("Can not execute statement:<p>$DBI::errstr");
+while (my @x=$sth->fetchrow) {
+    #remove commas from within fields before we print them... 
+    #ugh but parsing CSV output is otherwise a pain
+    for (my $gn=0;$gn<scalar @x;$gn++) { $x[$gn]=~s/,/_/g; }
+    print join ",", @x;
+    print "\n";
+}
+
+exit;
+

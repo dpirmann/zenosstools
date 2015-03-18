@@ -1,0 +1,229 @@
+#!/usr/bin/perl
+
+#=============================================================================#
+# zdb_zen_to_mysql_base
+#
+# By David Pirmann. This script is an interface to the JSON API exposed by the
+# "Zenoss Core" product from www.zenoss.org. This script requires "zapi_toolkit" 
+# from https://github.com/dpirmann/zenosstools
+# See README and the project WIKI on above GITHUB site for more details.
+#
+# This script is hereby released under GNU General Public License version 2
+# See http://www.gnu.org/licenses/gpl-2.0.html for details.
+=============================================================================
+
+use JSON::Parse ':all';
+use DBI;
+
+require 'zapi_toolkit.pl';
+
+#*****************************************
+#EDIT DATABASE NAME AND CREDENTIALS HERE
+#*****************************************
+my $source = "dbi:mysql:zenadminstuff:localhost";
+my $dbh = DBI->connect($source,'zenadminuser','pw') || warn;
+
+my $debug=0;
+my $debugold=0;
+ 
+#=============================================================================
+#look up existing Prodstate and Priority values/names
+#=============================================================================
+my %prodstatearry=&zapi_toolkit::get_valid_values('getProductionStates');
+my %prioarry=&zapi_toolkit::get_valid_values('getPriorities');
+my $dbupdated=time;
+
+&makedbcache($dbh);
+&cleanTables($dbh);
+
+#=============================================================================
+#prime the mysql database with info from api getDevices
+#=============================================================================
+sub makedbcache {
+    my ($dbh) = @_;
+
+    #first figure out how many items we have in our zenoss...
+    my $output = &zapi_toolkit::zcurlpost("device_router","DeviceRouter","getDevices",'{"limit":1}');
+    my $parsed= parse_json($output);
+    my $total=%$parsed->{'result'}->{'totalCount'};
+    print "Total=$total\n" if ($debug);
+
+    #iterate over the devices $ll at a time, process some fields, shove it in our sql db
+    my $ll=20;
+    for (my $jj=0;$jj<$total;$jj=$jj+$ll) {
+
+	my $data=qq({"start":$jj,"limit":$ll,"keys":["uuid","name","priority","systems","groups","productionState","collector","location","uid","ipAddressString","osModel","uptime","serialNumber","snmpCommunity","snmpVersion","snmpSysName","snmpDescr","id","device","hwManufacturer","hwModel","comments","description","memory","deviceClass"]});
+	my $output = &zapi_toolkit::zcurlpost("device_router","DeviceRouter","getDevices",$data);
+	my $parsed= parse_json($output);
+	my $ltotal=@{%$parsed->{'result'}->{'devices'}};
+
+	print "This starts at block=$jj\n" if ($debug);
+
+	for (my $i=0;$i<$ltotal;$i++) {
+
+	    my %keyarry;
+	    %keyarry=&zapi_toolkit::recurseParse("",$parsed->{'result'}->{'devices'}[$i],%keyarry);
+
+	    print "Working on $keyarry{'/name'}\n" if ($debug);
+
+###	    next unless ($keyarry{'/name'} eq "xxx");
+
+	    #test if host is already in database...
+	    #do this first... if the thing isn't in the database we'll grab add'l info
+	    my $sql=qq(select count(*) from zendevices where uuid="$keyarry{'/uuid'}");
+	    my $sth = $dbh->prepare($sql) or die ("Can not prepare statement:<p>$DBI::errstr");
+            $sth->execute or warn ("Can not execute statement:<p>$DBI::errstr");
+	    my $count=$sth->fetchrow;
+
+	    #we could also get the custom fields/cpu  - but adds 2x API calls per device
+	    #my $output=&zapi_toolkit::zcurlget($keyarry{'/uid'},"deviceCustomEdit","");
+	    #%keyarry=&zapi_toolkit::parsecprop($output,%keyarry);
+            #$keyarry{'/cpucount'} = &zapi_toolkit::getcpucount($keyarry{'/uid'});
+
+	    #prod & prio come across as values, we also want to store the names
+	    #this code takes the integer value and looks it up in the name arrays
+	    my $prodstate=%$parsed->{'result'}->{'devices'}[$i]->{'productionState'};
+	    foreach $x (sort keys %prodstatearry) {
+		if ($prodstatearry{$x}==$prodstate) {
+		    $prodstate=$x;
+		    last;
+		}
+	    }
+
+	    my $priority=%$parsed->{'result'}->{'devices'}[$i]->{'priority'};
+	    foreach $x (sort keys %prioarry) {
+		if ($prioarry{$x}==$priority) {
+		    $priority=$x;
+		    last;
+		}
+	    }
+	    
+	    #handle array of group names
+	    my @tmpa; my $hgrp;
+	    my $gnum = @{%$parsed->{'result'}->{'devices'}[$i]->{'groups'}}; #number of groups
+	    for (my $gn=0;$gn<$gnum;$gn++) {
+		push @tmpa, "|".%$parsed->{'result'}->{'devices'}[$i]->{'groups'}[$gn]->{'name'}."|";
+	    }
+	    $keyarry{'/allgroups'}=join ('',@tmpa);
+	    
+	    #handle array of system names
+	    my @tmpa; my $hsys;
+	    my $snum = @{%$parsed->{'result'}->{'devices'}[$i]->{'systems'}}; #number of systems
+	    for (my $sn=0;$sn<$snum;$sn++) {
+		push @tmpa, "|".%$parsed->{'result'}->{'devices'}[$i]->{'systems'}[$sn]->{'name'}."|";
+	    }
+	    $keyarry{'/allsystems'}=join ('',@tmpa);
+	    
+	    #convert uptime from a humanly readable d:h:m:s string to an integer seconds value
+	    if (exists $keyarry{'/uptime'}) {
+		my ($d,$h,$m,$s) = ($keyarry{'/uptime'} =~ m|(\d+)d:(\d+)h:(\d+)m:(\d+)s|);
+		$d=$d*86400;
+		$h=$h*3600;
+		$m=$m*60;
+		$keyarry{'/uptime'}=$s+$m+$h+$d;
+	    }
+
+	    #convert meg to gig
+	    if ($keyarry{'/memory/ram'} =~ /MB/) {
+		$keyarry{'/memory/ram'} =~ s/MB//;
+		$keyarry{'/memory/ram'} = sprintf "%.1f", ($keyarry{'/memory/ram'} / 1024); 
+	    }
+	    $keyarry{'/memory/ram'} =~ s/GB//;
+
+	    if ($debugold) {
+		foreach $x (sort keys %keyarry) {
+		    print "$x $keyarry{$x}\n";
+		}
+		print "==================\n";
+	    }
+	    
+	    if ($count) {
+		print "$keyarry{'/name'} Updating\n" if ($debugold);
+
+		$sql=qq(update zendevices set
+		    name="$keyarry{'/name'}",
+		    id="$keyarry{'/id'}",
+		    device="$keyarry{'/device'}",
+		    uid="$keyarry{'/uid'}",
+		    ipa="$keyarry{'/ipAddressString'}",
+		    location="$keyarry{'/location/name'}",
+		    deviceclass="$keyarry{'/deviceClass/name'}",
+		    collector="$keyarry{'/collector'}",
+		    comments="$keyarry{'/comments'}",
+		    description="$keyarry{'/description'}",
+		    ram="$keyarry{'/memory/ram'}",
+		    swap="$keyarry{'/memory/swap'}",
+		    prodstate="$prodstate",
+		    prodstateval=$keyarry{'/productionState'},
+		    priority="$priority",
+		    priorityval=$keyarry{'/priority'},
+		    groups="$keyarry{'/allgroups'}",
+		    systems="$keyarry{'/allsystems'}",
+		    osmodel="$keyarry{'/osModel/name'}",
+		    uptime=$keyarry{'/uptime'},
+		    serial="$keyarry{'/serialNumber'}",
+                    snmpcomm="$keyarry{'/snmpCommunity'}",
+                    snmpdescr="$keyarry{'/snmpDescr'}",
+                    snmpsysname="$keyarry{'/snmpSysName'}",
+                    snmpversion="$keyarry{'/snmpVersion'}",
+                    hwman="$keyarry{'/hwManufacturer/name'}",
+                    hwmodel="$keyarry{'/hwModel/name'}",
+                    dbupdated=$dbupdated
+
+		    where uuid="$keyarry{'/uuid'}");
+	    } else {
+		print "$keyarry{'/name'} Inserting\n" if ($debugold);
+
+		$sql=qq(insert into zendevices (name,id,device,uuid,uid,ipa,location,deviceclass,collector,comments,description,ram,swap,prodstate,prodstateval,priority,priorityval,groups,systems,osmodel,hwmodel,hwman,uptime,serial,snmpcomm,snmpsysname,snmpversion,snmpdescr,dnsfqdn,windomain,dbupdated) values ("$keyarry{'/name'}","$keyarry{'/id'}","$keyarry{'/device'}","$keyarry{'/uuid'}","$keyarry{'/uid'}","$keyarry{'/ipAddressString'}","$keyarry{'/location/name'}","$keyarry{'/deviceClass/name'}","$keyarry{'/collector'}","$keyarry{'/comments'}","$keyarry{'/description'}","$keyarry{'/memory/ram'}","$keyarry{'/memory/swap'}","$prodstate",$keyarry{'/productionState'},"$priority",$keyarry{'/priority'},"$keyarry{'/allgroups'}","$keyarry{'/allsystems'}","$keyarry{'/osModel/name'}","$keyarry{'/hwModel/name'}","$keyarry{'/hwManufacturer/name'}",$keyarry{'/uptime'},"$keyarry{'/serialNumber'}","$keyarry{'/snmpCommunity'}","$keyarry{'/snmpSysName'}","$keyarry{'/snmpVersion'}","$keyarry{'/snmpDescr'}","$keyarry{'/cDnsFQDN:string'}","$keyarry{'/cWindowsDomainName:string'}",$dbupdated));
+
+            }
+
+	    print "$sql\n\n\n" if ($debugold);
+	    my $sth = $dbh->prepare($sql) or die ("Can not prepare statement:<p>$DBI::errstr");
+	    $sth->execute or warn ("Can not execute statement:<p>$DBI::errstr");
+
+#now put groups and systems into zendevattr, not sure we need it but...
+#insert groups and systems
+#first clear out the old ones
+
+            my $sql = qq(delete from zendevattr where hostname="$keyarry{'/name'}" and (type='groups' or type='systems'));
+            my $sth = $dbh->prepare($sql) or die ("Can not prepare statement:<p>$DBI::errstr");
+            $sth->execute or warn ("Can not execute statement:<p>$DBI::errstr");
+	    
+            foreach $x ('groups', 'systems') {
+                $keyarry{"/all$x"}=~ s/\|\|/,/g;
+                $keyarry{"/all$x"}=~ s/\|//g;
+                my @tmp=split(',',$arry{"/all$x"});
+                foreach my $y (@tmp) {
+		    my $sql = qq(insert into zendevattr values ("$x","$arry{'/name'}","$y",'',$dbupdated));
+		    my $sth = $dbh->prepare($sql) or die ("Can not prepare statement:<p>$DBI::errstr");
+		    $sth->execute or warn ("Can not execute statement:<p>$DBI::errstr");
+                }   
+	    }
+	}
+    }
+}
+
+sub cleanTables {
+
+    #clean up the zendevices table
+    #two hours is enough if we run the base every half hour
+    my $time=$dbupdated-7200;
+
+    my $sql = "select name from zendevices where dbupdated<$time";
+    my $sth = $dbh->prepare($sql) or die ("Can not prepare statement:<p>$DBI::errstr");
+    $sth->execute or warn ("Can not execute statement:<p>$DBI::errstr");
+    while (my $name=$sth->fetchrow) {
+	print "Name $name is old...\n";
+    }
+
+    my $sql = "delete from zendevices where dbupdated<$time";
+    my $sth = $dbh->prepare($sql) or die ("Can not prepare statement:<p>$DBI::errstr");
+    $sth->execute or warn ("Can not execute statement:<p>$DBI::errstr");
+
+   
+}
+
+exit;
+
+
