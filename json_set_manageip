@@ -39,17 +39,21 @@ unless ($host && $newip) {
 }
 
 my $hostpath=&zapi_toolkit::gethostuid($host);
-if ($hostpath =~ m|/zport/dmd/|) {
-    print "Host $host found at $hostpath, proceeding\n\n"  if ($debug);
-
-    my $data=qq({"uids":["$hostpath"],"hashcheck":"","ip":"$newip"});
-    my $output = zapi_toolkit::zcurlpost("device_router","DeviceRouter","resetIp",$data);
-    my $success=&zapi_toolkit::catchJsonErrors($output);
-
-} else {
+unless ($hostpath=~ m|/zport/dmd|) {
     print STDERR "Host $host not found.\n";
+    exit;
 }
 
+print "Host $host found at $hostpath, proceeding\n\n"  if ($debug);
+
+my $data=qq({"uids":["$hostpath"],"hashcheck":"","ip":"$newip"});
+my $output = &zapi_toolkit::zcurlpost("device_router","DeviceRouter","resetIp",$data);
+my ($retval,$msg) = &ZenossPerl::catchJsonErrors($output);
+if ($retval) {
+    print "${hostpath}, error: ${msg}\n";
+} else {
+    print "${hostpath}, success\n";
+}
 
 exit;
 

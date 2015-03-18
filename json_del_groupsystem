@@ -65,15 +65,23 @@ if (exists $catarry{$name}) {
 $method=~s/get//; #getSystems -> Systems etc.
 while (my $host=shift) {
     print "Deleting host $host from $cat $name\n"  if ($debug);
+
     my $hostpath=&zapi_toolkit::gethostuid($host);
     unless ($hostpath =~ m|/zport/dmd/|) {
-	print "Host $host not found\n";
+        print STDERR "Host $host not found.\n";
 	next;
     }
 
     print "Host $host found at $hostpath, proceeding\n\n"  if ($debug);
     my $data=qq({"uids":["$hostpath"],"hashcheck":"","uid":"/zport/dmd/${method}${name}"});
     my $output = &zapi_toolkit::zcurlpost("device_router","DeviceRouter","removeDevices",$data);
+    my ($retval,$msg) = &ZenossPerl::catchJsonErrors($output);
+    if ($retval) {
+        print STDERR "${hostpath}, error: ${msg}\n";
+    } else {
+        print "${hostpath}, success\n";
+    }
+
 }
 
 

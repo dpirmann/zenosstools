@@ -68,13 +68,20 @@ while (my $host=shift) {
 
     my $hostpath=&zapi_toolkit::gethostuid($host);
     unless ($hostpath =~ m|/zport/dmd/|) {
-	print "Host $host not found\n";
+        print STDERR "Host $host not found.\n";
 	next;
     } 	
 
     print "Host $host found at $hostpath, proceeding\n\n"  if ($debug);
+
     my $data=qq({"uids":["$hostpath"],"ranges":[],"target":"/zport/dmd/${method}${name}","asynchronous":false});
     my $output = &zapi_toolkit::zcurlpost("device_router","DeviceRouter","moveDevices",$data);
+    my ($retval,$msg) = &ZenossPerl::catchJsonErrors($output);
+    if ($retval) {
+        print STDERR "${hostpath}, error: ${msg}\n";
+    } else {
+        print "${hostpath}, success\n";
+    }
 
 }
 

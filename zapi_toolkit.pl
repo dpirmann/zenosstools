@@ -128,6 +128,9 @@ sub catchErrors {
 # Function CATCHJSONERRORS
 # Give it an $output from a json curl POST command and it will look through for
 # the success and msg values.. returns value of success (0 for errors, 1 for ok)
+#
+# not all API calls return json on success/error. some that do:
+# setInfo
 #=============================================================================
 sub catchJsonErrors {
     my ($output) = @_;
@@ -136,9 +139,9 @@ sub catchJsonErrors {
 
     if ($success==0) {
 	my $err=%$parsed->{'result'}->{'msg'};
-	print "Error, $err\n";
+        return (1, "Error, $err");
     }
-    return $success;
+    return 0;
 }
 
 #=============================================================================

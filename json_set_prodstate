@@ -76,9 +76,9 @@ unless ($action && $value && (scalar @hostarray>0)) {
 foreach my $host (sort @hostarray) {
 
     #find out the /zport/dmd/host/path for the given host argument
-    my $hostpath=zapi_toolkit::gethostuid($host);
+    my $hostpath=&zapi_toolkit::gethostuid($host);
     unless ($hostpath=~ m|/zport/dmd|) {
-	print "Address $host not in Zenoss.\n";
+        print STDERR "Host $host not found.\n";
 	next;
     }
 
@@ -95,8 +95,13 @@ sub update_value {
 #the docs show a setPriority and setProdstate JSON API call but setInfo seems to do the trick
 
     my $data = qq({"uid":"$uid","$zaction":$value});
-    my $output = zapi_toolkit::zcurlpost("device_router","DeviceRouter","setInfo", $data);
-    print "$output\n";
+    my $output = &zapi_toolkit::zcurlpost("device_router","DeviceRouter","setInfo", $data);
+    my ($retval,$msg) = &ZenossPerl::catchJsonErrors($output);
+    if ($retval) {
+        print "${uid}, error: ${msg}\n";
+    } else {
+        print "${uid}, success\n";
+    }
 }
 
 

@@ -37,14 +37,19 @@ if ($hostpath=~ m|/zport/dmd|) {
     die "Address $manageIp already in Zenoss.\n";
 }
 
-my $hostpath=zapi_toolkit::gethostuid($deviceName);
+my $hostpath=&zapi_toolkit::gethostuid($deviceName);
 if ($hostpath=~ m|/zport/dmd|) {
     die "deviceName $deviceName already in Zenoss.\n";
 }
 
 my $data=qq({"deviceName":"$deviceName","deviceClass":"$deviceClass","manageIp":"$manageIp","model":true});
 my $output=&zapi_toolkit::zcurlpost("device_router","DeviceRouter","addDevice",$data);
-my $success=&zapi_toolkit::catchJsonErrors($output);
+my ($retval,$msg) = &ZenossPerl::catchJsonErrors($output);
+if ($retval) {
+    print "${deviceName}, error: ${msg}\n";
+} else {
+    print "${deviceName}, success\n";
+}
 
 
 exit;
