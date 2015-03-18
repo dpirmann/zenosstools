@@ -1,0 +1,45 @@
+#!/usr/bin/env python
+import Globals
+from Products.ZenUtils.ZenScriptBase import ZenScriptBase
+from transaction import commit
+import commands
+
+dmd = ZenScriptBase(connect=True,noopts=True).dmd
+
+# dump details about what is being monitored on a device
+
+
+# list of devices:
+
+devList = dmd.Devices.getSubDevices()
+
+# walk the device list, getting some data
+
+
+
+for dev in devList:
+    print "Device: %s (%s)" % (dev.id, dev.getDeviceClassPath())
+    print " - Bound Templates:"
+    for tp in dev.getRRDTemplates():
+        print "   - %s (%s)" % (tp.id, '/'.join(tp.getPrimaryPath()[3:-2]))
+
+        print "     - Datapoints:"
+        for dp in tp.getRRDDataPoints():
+            print "       - %s" % dp.id
+
+    # device components have templates also
+    print " - Device Components:"
+    for cp in dev.getMonitoredComponents():
+        print "   - %s" % "/".join(cp.getPhysicalPath()[cp.getPhysicalPath().index(dev.id) + 1:])
+
+        for tp in cp.getRRDTemplates():
+            print "     - component template: %s (%s)" % (tp.id, '/'.join(tp.getPrimaryPath()[3:-2]))
+        
+            print "     - Datapoints:"
+            for dp in tp.getRRDDataPoints():
+                print "       - %s" % dp.id
+
+    # print a separator
+    print "********************************************************"
+
+

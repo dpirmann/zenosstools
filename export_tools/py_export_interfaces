@@ -1,0 +1,19 @@
+#!/usr/bin/env python
+import Globals
+from Products.ZenUtils.ZenScriptBase import ZenScriptBase
+
+dmd = ZenScriptBase(connect=True).dmd
+from Products.Zuul import getFacade, listFacades
+
+for dev in dmd.Devices.getSubDevices():
+    gn=dev.getDeviceGroupNames()
+    for int in dev.os.interfaces():
+    	    ipn=int.id
+	    for a in int.ipaddresses():
+	    	ipa=a.getIpAddress()
+		if ipa == None:
+	           continue
+   	        else:
+	           print str(ipa) + ',' + str(dev.id) + ',' + str(ipn) + ',' + str(gn)
+
+

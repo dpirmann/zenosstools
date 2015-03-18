@@ -1,0 +1,11 @@
+#!/usr/bin/env python
+
+import Globals
+from Products.ZenUtils.ZenScriptBase import ZenScriptBase
+
+dmd = ZenScriptBase(connect=True).dmd
+
+foo=dmd.getDmdRoot("Monitors").Performance
+for s in foo.objectIds(spec=('PerformanceConf')):
+    print str(s)
+

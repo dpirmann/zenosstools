@@ -1,0 +1,23 @@
+#!/usr/bin/env python
+
+# easy python/dmd script to print
+# devicename, managed ip, snmp community, snmp ver, location field, and hwman type
+
+import Globals
+from Products.ZenUtils.ZenScriptBase import ZenScriptBase
+
+dmd = ZenScriptBase(connect=True).dmd
+
+import re
+p = re.compile('/Server', re.IGNORECASE)
+
+for dev in dmd.Devices.getSubDevices():
+    grp=dev.getDeviceClassPath()
+    if p.search(grp):
+        dn=dev.getDeviceName()
+        ip=dev.getManageIp()
+        sp=dev.zSnmpCommunity
+        sv=dev.zSnmpVer
+        ln=dev.getLocationName()
+        vv=dev.getHWManufacturerName()
+        print str(dn) + "," + str(ip) + "," + str(sp) + "," + str(sv) + "," + str(ln) + "," + str(vv)

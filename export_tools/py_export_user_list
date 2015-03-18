@@ -1,0 +1,17 @@
+#!/usr/bin/env python
+
+# easy python/dmd script to print out
+# zenoss userid, role, email
+
+import Globals
+from Products.ZenUtils.ZenScriptBase import ZenScriptBase
+
+dmd = ZenScriptBase(connect=True).dmd
+
+roleManager = dmd.acl_users.roleManager
+for user in dmd.ZenUsers.getUsers():
+    userId = user.getId()
+    userRoles = roleManager.getRolesForPrincipal(user)
+    userEmail = user.email
+    print userId, userRoles, userEmail
+

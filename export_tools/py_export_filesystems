@@ -1,0 +1,32 @@
+#!/usr/bin/env python
+
+import Globals
+from Products.ZenUtils.ZenScriptBase import ZenScriptBase
+
+dmd = ZenScriptBase(connect=True).dmd
+
+for dev in dmd.Devices.getSubDevices():
+    dname=dev.id
+    mip=dev.getManageIp()
+    for fs in dev.os.filesystems():
+        label=fs.id
+        used=fs.usedBytes()
+        if used == None:
+            continue
+
+        total=fs.totalBytes()
+        if total == None:
+            continue
+                
+        tblocks=fs.getTotalBlocks()
+        if tblocks == None:
+            continue
+                
+        used=used/1073741824
+        used=int(used)
+        total=total/1073741824
+        total=int(total)
+        print str(dname) + ',' + str(mip) + ',' + str(label) + ',' + str(total) + ',' + str(used) + ',' + str(tblocks)
+
+
+

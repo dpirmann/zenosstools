@@ -1,0 +1,38 @@
+#!/usr/bin/env python
+
+#python/dmd script to export notifications
+#cribbed from https://github.com/cparlette/ZenossImportExportScripts
+
+import Globals
+from Products.ZenUtils.ZenScriptBase import ZenScriptBase
+
+dmd = ZenScriptBase(connect=True).dmd
+from Products.Zuul import getFacade, listFacades
+
+tf = getFacade('triggers')
+for n in tf.getNotifications():
+    data = {}
+    data['notification_globalRead'] = n.globalRead
+    data['notification_globalWrite'] = n.globalWrite
+    data['notification_globalManage'] = n.globalManage
+    data['subscriptions'] = n.subscriptions
+    data['recipients'] = n.recipients
+    data['content'] = n.content
+    data['send_initial_occurrence'] = n.send_initial_occurrence
+    data['delay_seconds'] = n.delay_seconds
+    data['send_clear'] = n.send_clear
+    data['enabled'] = n.enabled
+    data['description'] = n.description
+    data['repeat_seconds'] = n.repeat_seconds
+    data['userManage'] = n.userManage
+    data['userRead'] = n.userRead
+    data['userWrite'] = n.userWrite
+    data['action'] = n.action
+    print 'X'*80
+    print n.id
+    print 'X'*80
+    print ""
+    print data
+    print ""
+    print ""
+    print ""

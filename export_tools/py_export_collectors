@@ -1,0 +1,22 @@
+#!/usr/bin/env python
+
+import Globals
+from Products.ZenUtils.ZenScriptBase import ZenScriptBase
+
+dmd = ZenScriptBase(connect=True).dmd
+
+#import re
+#p = re.compile('/Server/Windows', re.IGNORECASE)
+
+for dev in dmd.Devices.getSubDevices():
+    dn=dev.getDeviceName()
+    col=dev.getPerformanceServerName()
+    print str(dn) + "," + str(col) 
+
+
+
+
+
+
+
+
