@@ -4,8 +4,8 @@
 # pzenoss_api
 #
 # By David Pirmann. This script is an interface to the JSON API exposed by the
-# "Zenoss Core" product from www.zenoss.org. This script requires "zapi_toolkit" 
-# from https://github.com/dpirmann/zenosstools
+# "Zenoss Core" product from www.zenoss.org. 
+#
 # See README and the project WIKI on above GITHUB site for more details.
 #
 # This script is hereby released under GNU General Public License version 2
@@ -22,8 +22,8 @@ Syntax: pzenoss_api "endpoint" "action" "method" "data"
 
 Examples:
 
-pzenoss_api "device_router" "DeviceRouter" "getProductionStates" "{}"
-pzenoss_api "device_router" "DeviceRouter" "getDeviceUids" "{\"uid\":\"/zport/dmd/Devices/Server/Linux\"}"
+pzenoss_api device_router DeviceRouter getProductionStates '{}'
+pzenoss_api device_router DeviceRouter getDeviceUids '"{"uid":"/zport/dmd/Devices/Server/Linux"}'
 
 See: http://wiki.zenoss.org/Working_with_the_JSON_API for more examples
 EOF
