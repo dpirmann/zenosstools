@@ -71,7 +71,12 @@ sub move_device {
 
     my $data = qq({"uids":["$uid"],"target":"/zport/dmd/Devices$value"});
     my $output = zapi_toolkit::zcurlpost("device_router","DeviceRouter","moveDevices", $data);
-    &zapi_toolkit::catchJsonErrors($output);
+    my ($retval,$msg) = &ZenossPerl::catchJsonErrors($output);
+    if ($retval) {
+	print "${uid} to $value, error: ${msg}\n";
+    } else {
+	print "${uid} to $value, success\n";
+    }
 }
 
 
