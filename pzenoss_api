@@ -52,7 +52,6 @@ my $ROUTER_ENDPOINT=shift;
 my $ROUTER_ACTION=shift;
 my $ROUTER_METHOD=shift;
 my $DATA=shift;
-my $output;
 
 unless ($ROUTER_ENDPOINT && $ROUTER_ACTION && $ROUTER_METHOD && $DATA) {
     &usage;
@@ -65,7 +64,7 @@ print "Method   = $ROUTER_METHOD\n";
 print "Data     = $DATA\n";
 
 
-$output = zcurlpost($ROUTER_ENDPOINT,$ROUTER_ACTION,$ROUTER_METHOD,$DATA);
+my $output = zcurlpost($ROUTER_ENDPOINT,$ROUTER_ACTION,$ROUTER_METHOD,$DATA);
 my $parsed=parse_json($output);
 print Dumper($parsed);
 print "\n";	
