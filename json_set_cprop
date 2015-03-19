@@ -1,0 +1,54 @@
+#!/usr/bin/perl
+
+#=============================================================================
+# json_set_cprop
+#
+# By David Pirmann. This script is an interface to the JSON API exposed by the
+# "Zenoss Core" product from www.zenoss.org. This script requires "zapi_toolkit" 
+# from https://github.com/dpirmann/zenosstools
+# See README and the project WIKI on above GITHUB site for more details.
+#
+# This script is hereby released under GNU General Public License version 2
+# See http://www.gnu.org/licenses/gpl-2.0.html for details.
+#
+
+#=============================================================================
+
+sub usage {
+    print "Usage: $0 hostname-or-ip cprop cvalue\n";
+    print "Set a cprop on an object. Right now the cprop must be type string.\n";
+    print "Create the cprops using the GUI before attempting to set them here.\n";
+    print "Hostname or ip must match exactly a device in Zenoss.\n";
+    print "example. json_set_cprop 10.0.0.1 cWindowsDomainName:string WINDOMAIN\n";
+    exit;
+}
+
+require 'zapi_toolkit.pl';
+
+my $debug=1;
+my $debugold=1;
+
+my $host=shift;
+my $cprop=shift;
+my $cvalue=shift;
+
+&usage unless ($host && $cprop && $cvalue);
+
+#find out the /zport/dmd/host/path for the given host argument
+my $hostpath=&zapi_toolkit::gethostuid($host);
+unless ($hostpath=~ m|/zport/dmd|) {
+    print STDERR "Host $host not found.\n";
+    die;
+}
+
+print "$hostpath\n" if ($debug);
+
+unless ($cprop =~ m|^/|) {
+    $cprop = "/" . $cprop;
+}
+
+$output=&zapi_toolkit::setcprop($hostpath,$cprop,$cvalue));
+&catchErrors($output);
+
+exit;
+

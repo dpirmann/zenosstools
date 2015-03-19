@@ -208,6 +208,23 @@ sub dec2ip ($) { join '.', unpack 'C4', pack 'N', shift; }
 sub ip2dec ($) { unpack N => pack CCCC => split /\./ => shift; }
 
 #=============================================================================
+# urlencode/urldecode - implement url-encoding for curl arguments
+#=============================================================================
+sub urlencode {
+    my $s = shift;
+    $s =~ s/ /+/g;
+    $s =~ s/([^A-Za-z0-9\+-])/sprintf("%%%02X", ord($1))/seg;
+    return $s;
+}
+
+sub urldecode {
+    my $s = shift;
+    $s =~ s/\%([A-Fa-f0-9]{2})/pack('C', hex($1))/seg;
+    $s =~ s/\+/ /g;
+    return $s;
+}
+
+#=============================================================================
 # sub getCollectorList
 # return an array of valid collector names
 # should be combined into get_valid_values?
@@ -418,3 +435,55 @@ sub manip_event {
     }
 }
 
+#=============================================================================
+# Function SETCPROP
+# Invokes the curl post JSON api method
+# setcprop <endpoint> <action> <method> <data>
+# uses ZENBASE, ZAPIUSER, and ZAPIPASS variables
+#=============================================================================
+sub setcprop {
+    my ($hostpath,$cprop,$cvalue) = @_;
+
+    if ($debug) {
+	print "Hostpath=$hostpath\n";
+	print "Cprop=$cprop\n";
+	print "Cvalue=$cvalue\n";
+    }
+
+    #first, get existing cprops... we need to make sure it exists and is string type...
+
+    my $output=&zapi_toolkit::zcurlget($hostpath,"deviceCustomEdit","");
+    &zapi_toolkit::catchErrors($output);
+    my %aar=&zapi_toolkit::parsecprop($output);
+
+    if (exists ($aar{$cprop})) {
+	print "We may proceed.\n" if ($debug);
+    } else {
+	die "Did not exist...\n";
+    }
+    
+    if ($cprop=~/\:string/) {
+	print "We may proceed.\n" if ($debug);
+    } else {
+	die "Not string...\n";
+    }
+
+    $cprop=~ s/\:/%3A/;#urlencode it
+    $cprop=~ s|^/||; #cprops come back from parsecprop as properties in a tree-- strip the leading /
+
+    #only for string type properties!!!
+    $cvalue=&zapi_toolkit::urlencode($cvalue);
+
+    my $ins;
+    if ($ZENBASE =~ /^https/) {
+        $ins=" --insecure ";
+    }
+
+    my $cmd = qq(curl $ins -s -u "$ZAPIUSER:$ZAPIPASS" -X POST -H "Content-Type: application/x-www-form-urlencoded" \\
+    -d "zenScreenName=deviceCustomEdit" \\
+    -d "${cprop}=${cvalue}" \\
+    -d "saveCustProperties%3Amethod=+Save+" \\
+    "${ZENBASE}${hostpath}");
+
+    return qx($cmd);
+}
