@@ -26,4 +26,4 @@ interacting with the Zenoss JSON API. Every other tool in this repo
 will depend on the zapi_toolkit. To set up, edit "ZENBASE",
 "ZAPIUSER", and "ZAPIPASS" vars.
 
-
+See https://github.com/dpirmann/zenosstools/wiki for more details.
