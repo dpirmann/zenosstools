@@ -74,10 +74,10 @@ unless ($summary) {
 }
 
 my $data=qq({"summary":"$summary","device":"$device","component":"$component","severity":$severity,"evclasskey":"$evkey","evclass":"$evclass"});
-my $output = ZenossPerl::zcurlpost("evconsole_router","EventsRouter","add_event",$data);
+my $output = &zapi_toolkit::zcurlpost("evconsole_router","EventsRouter","add_event",$data);
 
 #actually doesn't return anything of value....
-my ($retval,$msg) = &ZenossPerl::catchJsonErrors($output);
+my ($retval,$msg) = &zapi_toolkit::catchJsonErrors($output);
 if ($retval) {
     print "${deviceName} ($manageIp), error: ${msg}\n";
 } else {
