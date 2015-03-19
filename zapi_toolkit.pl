@@ -88,9 +88,6 @@ sub zcurlget {
 # the error codes errorType and errorValue
 #=============================================================================
 sub catchErrors {
-    my $subname=(caller(0))[3]; my $debugsub=1 if ($debuggy{$subname}==1);
-    logger("Entering $subname") if ($debugsub);
-
     my ($output) = @_;
 
 #some types of plain text errors found here.
@@ -156,10 +153,10 @@ sub gethostuid {
     #decimal and back to dotted - if there's a match it was an IP address.
     my $param; 
     if ($val eq &zapi_toolkit::dec2ip(&zapi_toolkit::ip2dec($val))) {
-	print STDERR "GETHOSTUID Found IP $val\n" if ($debugsub);
+	print STDERR "GETHOSTUID Found IP $val\n" if ($debug);
 	$param= qq("ipAddress":"$val");
     } else {
-	print STDERR "GETHOSTUID Found HOSTNAME $val\n" if ($debugsub);
+	print STDERR "GETHOSTUID Found HOSTNAME $val\n" if ($debug);
 	$param= qq("name":"$val");
     }
 
@@ -168,10 +165,10 @@ sub gethostuid {
     warn if &zapi_toolkit::catchErrors($output);
 
     my $parsed= parse_json($output);
-    print STDERR Dumper($parsed) if ($debugsub);
+    print STDERR Dumper($parsed) if ($debug);
 
     my $total = %$parsed->{'result'}->{'totalCount'};
-    print STDERR "GETHOSTUID TOTAL RESULTS = $total\n" if ($debugsub);
+    print STDERR "GETHOSTUID TOTAL RESULTS = $total\n" if ($debug);
 
     #return -1 if no results found
     if ($total == 0) {
@@ -479,6 +476,7 @@ sub setcprop {
         $ins=" --insecure ";
     }
 
+    #this could probably be converted to work with zapi_toolkit::zcurlget with some testing
     my $cmd = qq(curl $ins -s -u "$ZAPIUSER:$ZAPIPASS" -X POST -H "Content-Type: application/x-www-form-urlencoded" \\
     -d "zenScreenName=deviceCustomEdit" \\
     -d "${cprop}=${cvalue}" \\
@@ -486,4 +484,38 @@ sub setcprop {
     "${ZENBASE}${hostpath}");
 
     return qx($cmd);
+}
+
+#=============================================================================
+# Function CREATEMWINDOW
+# Given a maintenance window name and a Zenoss device name, creates the maint window
+#=============================================================================
+
+sub createmwindow {
+    my ($MWNAME,$hostpath) = @_;
+    my $output=&zapi_toolkit::zcurlget($hostpath,"manage_addMaintenanceWindow","newId=$MWNAME");
+    return $output;
+}
+
+#=============================================================================
+# Function MODIFYMWINDOW
+# modifymwindow MWname, hostpath, time(length in minutes)
+# sets up a MW on host starting NOW for given length of time (in minutes)
+#=============================================================================
+
+sub modifymwindow {
+    my ($MWNAME,$hostpath,$time) = @_;
+    
+    #today's current date and time will be used to start the Mwindow immediately
+    my ($sec,$min,$hour,$mday,$mon,$year,$wday,$yday,$isdst) = localtime(time());
+    $year=$year+1900;
+    $mon=$mon+1;
+
+    #the supplied # of minutes converted into hours and minutes
+    my $dhours = int ($time / 60);
+    my $dminut = int ($time % 60);
+
+    my $output=&zapi_toolkit::zcurlget($hostpath,"maintenanceWindows/$MWNAME/manage_editMaintenanceWindow","startHours=${hour}&startMinutes=${min}&durationHours=${dhours}&durationMinutes=${dminut}&startDate=${mon}/${mday}/${year}&repeat=Never&enabled=1");
+
+    return $output;
 }
