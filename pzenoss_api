@@ -31,10 +31,21 @@ EOF
 exit;
 }
 
+#requirements - 
+# * unix utility "curl"
+# * Perl module JSON::Parse
+#set up
+# * edit "ZENBASE", "ZAPIUSER", and "ZAPIPASS" vars.
+
+#zenbase is the URL to your zenoss implementation
+my $ZENBASE  = 'http://zenoss:8080';
+
+#zapiuser/zapipass - user/pass to use the zenoss api.
+my $ZAPIUSER = 'apiuser';
+my $ZAPIPASS = 'zapiuser';
+
 use JSON::Parse ':all';
 use Data::Dumper;
-
-require "zapi_toolkit.pl";
 
 #parse our arguments
 my $ROUTER_ENDPOINT=shift;
@@ -54,12 +65,40 @@ print "Method   = $ROUTER_METHOD\n";
 print "Data     = $DATA\n";
 
 
-$output = &zapi_toolkit::zcurlpost($ROUTER_ENDPOINT,$ROUTER_ACTION,$ROUTER_METHOD,$DATA);
-die if &zapi_toolkit::catchErrors($output);
-
+$output = zcurlpost($ROUTER_ENDPOINT,$ROUTER_ACTION,$ROUTER_METHOD,$DATA);
 my $parsed=parse_json($output);
 print Dumper($parsed);
 print "\n";	
 
 exit;
 
+
+#=============================================================================
+# Function ZCURLPOST
+# Invokes the curl post JSON api method
+# zcurlpost <endpoint> <action> <method> <data>
+# uses ZENBASE, ZAPIUSER, and ZAPIPASS variables
+#=============================================================================
+sub zcurlpost {
+    my ($ROUTER_ENDPOINT,$ROUTER_ACTION,$ROUTER_METHOD,$DATA) = @_;
+
+    #all the quote marks inside the data string have to be escaped.
+    #i do it here so that the methods that call zcurlpost are a little
+    #easier to read
+    $DATA=~s/\"/\\"/g;
+
+    #zenoss5 runs under a self signed SSL cert (https) by default;
+    #so unless you have installed a real cert, ignore the warning
+    my $ins;
+    if ($ZENBASE =~ /^https/) {
+        $ins=" --insecure "; #
+    }
+
+    #in the cmd there's those end of line escaped backslashes to make the command
+    #a little easier to read
+    my $cmd = qq(curl $ins -s -u "$ZAPIUSER:$ZAPIPASS" -X POST -H "Content-Type: application/json" \\
+    -d "{\\"action\\":\\"$ROUTER_ACTION\\",\\"method\\":\\"$ROUTER_METHOD\\",\\"data\\":[$DATA], \\"tid\\":1}" \\
+    "$ZENBASE/zport/dmd/$ROUTER_ENDPOINT");
+
+    return qx($cmd);
+}
