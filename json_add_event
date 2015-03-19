@@ -1,0 +1,91 @@
+#!/usr/bin/perl
+
+#=============================================================================
+# json_add_event
+#
+# By David Pirmann. This script is an interface to the JSON API exposed by the
+# "Zenoss Core" product from www.zenoss.org. This script requires "zapi_toolkit" 
+# from https://github.com/dpirmann/zenosstools
+# See README and the project WIKI on above GITHUB site for more details.
+#
+# This script is hereby released under GNU General Public License version 2
+# See http://www.gnu.org/licenses/gpl-2.0.html for details.
+#=============================================================================
+
+sub usage {
+    print "Usage: $0 -s summary [-d device -c component -v severity -e evclass -k evkey]\n";
+    print "Summary is required, the rest are optional.\n";
+    print "Evclass is something like /Status/Ping.\n";
+    print "Severity is numeric, e.g. 5, 4, 3, 2 (critical, error, warning, info)\n";
+    print "Defaults: Severity=2, Evclass=/Unknown\n";
+    exit;
+}
+
+use Getopt::Std;
+use JSON::Parse ':all';
+require 'zapi_toolkit.pl';
+
+my $debug=0;
+my $debugold=0;
+
+#----------------------------------------------------
+# process the arguments
+#----------------------------------------------------
+
+my %opts;
+my $summary;
+my $device;
+my $component;
+my $severity=2;
+my $evclass="/Unknown";
+my $evkey;
+
+getopts('s:d:c:v:e:k:h',\%opts);
+if (defined $opts{'h'}) {
+    &usage;
+}
+
+if (defined $opts{'s'}) {
+    $summary = $opts{'s'};
+}
+
+if (defined $opts{'d'}) {
+    $device = $opts{'d'};
+}
+
+if (defined $opts{'c'}) {
+    $component = $opts{'c'};
+}
+
+if (defined $opts{'v'}) {
+    $severity = $opts{'v'};
+}
+
+if (defined $opts{'e'}) {
+    $evclass = $opts{'e'};
+}
+
+if (defined $opts{'k'}) {
+    $evkey = $opts{'k'};
+}
+
+unless ($summary) {
+    &usage;
+}
+
+my $data=qq({"summary":"$summary","device":"$device","component":"$component","severity":$severity,"evclasskey":"$evkey","evclass":"$evclass"});
+my $output = ZenossPerl::zcurlpost("evconsole_router","EventsRouter","add_event",$data);
+
+#actually doesn't return anything of value....
+my ($retval,$msg) = &ZenossPerl::catchJsonErrors($output);
+if ($retval) {
+    print "${deviceName} ($manageIp), error: ${msg}\n";
+} else {
+    print "${deviceName} ($manageIp), success\n";
+}
+
+
+
+
+
+
