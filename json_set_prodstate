@@ -49,16 +49,19 @@ while (my $option=shift) {
 print "Action = $action\n" if ($debug);
 print "Value  = $value\n" if ($debug);
 
+my $get_action; my $set_action;
 if ($action =~ /^prodstate$/i) {
-    $zaction='getProductionStates';
+    $get_action='getProductionStates';
+    $set_action='productionState';
 } elsif ($action =~ /^priority$/i) {
-    $zaction='getPriorities';
+    $get_action='getPriorities';
+    $set_action='priority';
 } else {
+    print "Oops. Needs action of prodstate or priority\n";
     &usage;
-    die "Oops. Needs action of prodstate or priority\n";
 }
 
-my %valarry=&zapi_toolkit::get_valid_values($zaction);
+my %valarry=&zapi_toolkit::get_valid_values($get_action);
 
 if ($value =~ /^list$/i) {
     print "Valid values for action $action:\n";
@@ -82,17 +85,12 @@ foreach my $host (sort @hostarray) {
 	next;
     }
 
-    &update_value($zaction,$hostpath,$valarry{$value});
+    &update_value($set_action,$hostpath,$valarry{$value});
 }
 
 
 sub update_value {
     my ($zaction,$uid,$value) = @_;
-
-    $zaction='productionState' if ($zaction eq "getProductionStates");
-    $zaction='priority' if ($zaction eq "getPriorities");
-
-#the docs show a setPriority and setProdstate JSON API call but setInfo seems to do the trick
 
     my $data = qq({"uid":"$uid","$zaction":$value});
     my $output = &zapi_toolkit::zcurlpost("device_router","DeviceRouter","setInfo", $data);
