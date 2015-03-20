@@ -48,7 +48,7 @@ print "Host $host found at $hostpath, proceeding\n\n"  if ($debug);
 
 my $data=qq({"uids":["$hostpath"],"hashcheck":"","ip":"$newip"});
 my $output = &zapi_toolkit::zcurlpost("device_router","DeviceRouter","resetIp",$data);
-my ($retval,$msg) = &ZenossPerl::catchJsonErrors($output);
+my ($retval,$msg) = &zapi_toolkit::catchJsonErrors($output);
 if ($retval) {
     print "${hostpath}, error: ${msg}\n";
 } else {

@@ -76,7 +76,7 @@ while (my $host=shift) {
 
     my $data=qq({"uids":["$hostpath"],"ranges":[],"target":"/zport/dmd/${method}${name}","asynchronous":false});
     my $output = &zapi_toolkit::zcurlpost("device_router","DeviceRouter","moveDevices",$data);
-    my ($retval,$msg) = &ZenossPerl::catchJsonErrors($output);
+    my ($retval,$msg) = &zapi_toolkit::catchJsonErrors($output);
     if ($retval) {
         print STDERR "${hostpath}, error: ${msg}\n";
     } else {

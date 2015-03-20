@@ -34,7 +34,7 @@ my $newname=shift;
 &usage unless ($host && $newname);
 
 #find out the /zport/dmd/host/path for the given host argument
-my $hostpath=ZenossPerl::gethostuid($host);
+my $hostpath=zapi_toolkit::gethostuid($host);
 print "$hostpath\n" if ($debug);
 
 unless ($hostpath =~ m|/zport/dmd|) {

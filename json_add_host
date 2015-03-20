@@ -44,7 +44,7 @@ if ($hostpath=~ m|/zport/dmd|) {
 
 my $data=qq({"deviceName":"$deviceName","deviceClass":"$deviceClass","manageIp":"$manageIp","model":true});
 my $output=&zapi_toolkit::zcurlpost("device_router","DeviceRouter","addDevice",$data);
-my ($retval,$msg) = &ZenossPerl::catchJsonErrors($output);
+my ($retval,$msg) = &zapi_toolkit::catchJsonErrors($output);
 if ($retval) {
     print "${deviceName} ($manageIp), error: ${msg}\n";
 } else {

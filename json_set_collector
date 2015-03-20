@@ -54,7 +54,7 @@ while (my $host=shift) {
 
     my $data=qq({"uids":["$hostpath"],"hashcheck":"","collector":"$newcollector","moveData":true});
     my $output = &zapi_toolkit::zcurlpost("device_router","DeviceRouter","setCollector",$data);
-    my ($retval,$msg) = &ZenossPerl::catchJsonErrors($output);
+    my ($retval,$msg) = &zapi_toolkit::catchJsonErrors($output);
     if ($retval) {
         print STDERR "${hostpath}, error: ${msg}\n";
     } else {
