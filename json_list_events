@@ -2,14 +2,6 @@
 
 #=============================================================================
 # json_list_events
-#
-# By David Pirmann. This script is an interface to the JSON API exposed by the
-# "Zenoss Core" product from www.zenoss.org. This script requires "zapi_toolkit" 
-# from https://github.com/dpirmann/zenosstools
-# See README and the project WIKI on above GITHUB site for more details.
-#
-# This script is hereby released under GNU General Public License version 2
-# See http://www.gnu.org/licenses/gpl-2.0.html for details.
 #=============================================================================
 
 sub usage {
@@ -18,9 +10,9 @@ $0: Lists events from the zenoss event console.
 Usage: $0 ...
 
 Arguments = 
-\tstate=[new,acknowledged,suppressed,closed,cleared,aged] (default=new)
+\tstate=[new,acknowledged,suppressed,closed,cleared,aged,all] (default=new)
 \tfields=[any available field] (default=a useful selection)
-\tsev=[5,4,3,2,1] (default=4)(minimum severity to print)
+\tsev=[5,4,3,2,1,0] (default=4)(minimum severity to print)
 \tprodState=[device prodstate] (default=Pre-Production)
 \tevclass=[some event class, e.g. /Status/Ping] (default=no filter)
 \tdeviceclass=[some device class] (default=no filter)
@@ -30,6 +22,7 @@ Arguments =
 \thelp (this help)
 \tlistfields (list available event fields)
 \tprintjson=(yes|no) (default=no)
+\tdebug=debugging output on
 EOF
 exit;
 
@@ -38,119 +31,161 @@ exit;
 use JSON::Parse ':all';
 require 'zapi_toolkit.pl';
 
-$debug=0;
-$debugold=0;
+$debug=0; #or see debug argument
 
 #define alert states - used to convert text to values
-my %alertstates;
-$alertstate{'new'}=0;
-$alertstate{'acknowledged'}=1;
-$alertstate{'suppressed'}=2;
-$alertstate{'closed'}=3;
-$alertstate{'cleared'}=4;
-$alertstate{'aged'}=6;
-
-my %prodstatearry=&zapi_toolkit::get_valid_values('getProductionStates');
+my %alertstates=&zapi_toolkit::get_valid_values('getAlertStates');
+my %prodstates=&zapi_toolkit::get_valid_values('getProductionStates');
 
 # set up values and their defaults 
 my %args;
 $args{'state'}='new';  
-$args{'fields'}="/firstTime,/count,/dedupid,/device/text,/count,/summary,/severity,/eventClass/text";
-$args{'sev'}='4';
+$args{'sev'}='4'; #minimum sev to print.
+$args{'fields'}="/firstTime,/count,/dedupid,/device/text,/details/grname,/count,/summary,/severity,/eventClass/text";
 $args{'prodState'}='Pre-Production';
 
 # process the arguments
 while (my $arg=shift) {
     &usage if ($arg eq 'help');
     &listfields if ($arg eq 'listfields');
-    foreach my $x ('state','fields','sev','prodstate','evclass','deviceclass','host','group','system','help','printjson') {
+    if ($arg eq 'debug') {
+	$debug=1;
+	next;
+    }
+    foreach my $x ('state','fields','sev','prodstate','evclass','deviceclass','host','group','system','help','printjson','debug') {
 	if ($arg=~/^${x}=/) {
 	    ($args{$x}) = ($arg =~ /${x}=(.+)/); 
 	}
     }
 }
 
-#set up a value for the prod state name
-if (defined $prodstatearry{$args{'prodstate'}}) { 
-    $args{'prodstateval'}= $prodstatearry{$args{'prodstate'}};
+#Lookup value for the prod state name and store in %args
+if (defined $prodstates{$args{'prodstate'}}) { 
+    $args{'prodstateval'}= $prodstates{$args{'prodstate'}};
+}
+
+#handle case of wanting to see all types
+if ($args{'state'} eq "all") {
+    $args{'state'}="new,acknowledged,suppressed,closed,cleared,aged";
 }
 
 #figure out which alertstates we asked for by name and make a nice list
 my @astate;
 foreach $x (split(/,/,$args{'state'})) {
-    push @astate, $alertstate{$x};
+    push @astate, $alertstates{$x};
 }
-my $astate=join(',',@astate);
+$args{'astate'}=join(',',@astate);
 
 #process fields into an array and also make a hash with flags of what to print later
 my %pfields;
 my $fieldcount=0;
 foreach my $x (split(/,/,$args{'fields'})) {
-    $fieldcount++;
     unless ($x =~ /^\//) { $x = "/" . $x; } #add leading /
+    $fieldcount++;
     $pfields{$x}++;
 }
 $fieldcount++ if (defined $pfields{'/all'});
 
-#---------------------------------------------------------------------------------
-
-
-my @data;
-push @data, qq("limit":1000);
-push @data, qq("params":{\"eventState\":[$astate]});
-my $data=join (',', @data); $data=qq({$data});
-my $output = &zapi_toolkit::zcurlpost("evconsole_router","EventsRouter","query",$data);
-my $parsed=parse_json($output);
-my $tt=@{%$parsed->{'result'}->{'events'}};
-
+#find hostpath if we gave arg host.
 my $hostpath;
 if (defined $args{'host'}) {
-    $hostpath=&zapi_toolkit::gethostuid($args{'host'});
+    $args{'hostpath'}=&zapi_toolkit::gethostuid($args{'host'});
 }
 
-for (my $ev=0;$ev<$tt;$ev++) {
-    my %ear=&zapi_toolkit::recurseParse("",$parsed->{result}->{events}[$ev],%ear);
-    if (defined $args{'sev'}) {
-	next unless ($ear{'/severity'}>=$args{'sev'});
+#debug arg dump---------------------------------------------------------------------
+if ($debug) {
+    foreach $x (sort keys %args) {
+	print "ARRRRRG $x $args{$x}\n";
     }
-    if (defined $args{'prodstateval'}) {
-	next unless ($ear{'/details/zenoss.device.production_state'} >= $args{'prodstateval'});
-    }
-    if (defined $args{'evclass'}) {
-	next unless ($ear{'/eventClass/text'} eq $args{'evclass'});
-    }
-    if (defined $args{'deviceclass'}) {
-	my $tmp=$ear{'/details/zenoss.device.device_class'};
-	next unless ($args{'deviceclass'} =~ /$tmp/i);
-    }
-    if (defined $args{'host'}) {
-	next unless ($ear{'/device/uid'} eq $hostpath);
-    }
-    if (defined $args{'group'}) {
-	next unless ($ear{'/0/DeviceGroups/name'} eq $args{'group'}); #not ideal, using first available group
-    }
-    if (defined $args{'system'}) {
-	my $tmp=$ear{'/0/DeviceSystems/name'}; #not ideal, using 1st available system..
-	next unless ($args{'system'} =~ /$tmp/i);
-    }
+}
 
-    if ($args{'printjson'}=~/yes/i) {
-	my @json;
-	if (defined $pfields{'/all'}) {
-	    foreach my $x (sort keys %ear) { $ear{$x}=~s/\\//g; push @json, qq("$x":"$ear{$x}"); }
-	} else {
-	    foreach my $x (sort keys %pfields) { next if ($x eq '/all'); $ear{$x}=~s/\\//g; push @json, qq("$x":"$ear{$x}"); }
-	}
-	print "{" . join(",",@json) . "}\n";
-    } else {
-	if (defined $pfields{'/all'}) {
-	    foreach my $x (sort keys %ear) { print qq($x: $ear{$x}\n); }
-	} else {
-	    foreach my $x (sort keys %pfields) { next if ($x eq '/all'); print qq($x: $ear{$x}\n); }
-	}
-	print "------------------------------------------------\n" if ($fieldcount>1);
-    }
+#---------------------------------------------------------------------------------
+#create the query and run it with limit 0 to find out how many events are in the database.
 
+my @data; my @dataparams;
+
+push @data,qq("uid":"$args{'hostpath'}") if (defined $args{'host'});
+push @data,qq("uid":"/zport/dmd/Groups$args{'group'}") if (defined $args{'group'});
+push @dataparams, qq("eventClass":"$args{'evclass'}") if (defined $args{'evclass'});
+push @dataparams, qq("eventState":[$args{'astate'}]) if ($args{'astate'}>=0);
+####push @dataparams, qq("severity":[]) if .. want to include sev but need to make it into a list. punt for now
+
+my $dataparams=join ',', @dataparams; $dataparams=qq("params":{$dataparams});
+print "dataparams=$dataparams\n" if ($debug);
+
+push @data,$dataparams;
+
+my $data=join (',', @data); $data=qq({$data,"limit":LIMITX,"start":STARTX});
+
+my $qdata=$data;
+$qdata=~ s/LIMITX/0/;
+$qdata=~ s/STARTX/0/;
+
+print "datacount=$qdata\n" if ($debug);
+
+my $output = &zapi_toolkit::zcurlpost("evconsole_router","EventsRouter","query",$qdata);
+my $parsed=parse_json($output);
+my $total=%$parsed->{'result'}->{'totalCount'};
+print "Total=$total\n" if ($debug);
+
+my $ll=100;
+for (my $jj=0;$jj<$total;$jj=$jj+$ll) {
+
+    print "This starts at block=$jj\n" if ($debug);
+
+    $qdata=$data;
+    $qdata=~ s/LIMITX/$ll/;
+    $qdata=~ s/STARTX/$jj/;
+
+    print "data=$qdata\n" if ($debug);
+
+    my $output = &zapi_toolkit::zcurlpost("evconsole_router","EventsRouter","query",$qdata);
+    my $parsed=parse_json($output);
+    my $tt=@{%$parsed->{'result'}->{'events'}};
+
+    for (my $ev=0;$ev<$tt;$ev++) {
+	my %ear=&zapi_toolkit::recurseParse("",$parsed->{result}->{events}[$ev],%ear);
+	if (defined $args{'sev'}) {
+	    next unless ($ear{'/severity'}>=$args{'sev'});
+	}
+	if (defined $args{'prodstateval'}) {
+	    next unless ($ear{'/details/zenoss.device.production_state'} >= $args{'prodstateval'});
+	}
+	if (defined $args{'evclass'}) {
+	    next unless ($ear{'/eventClass/text'} eq $args{'evclass'});
+	}
+	if (defined $args{'deviceclass'}) {
+	    my $tmp=$ear{'/details/zenoss.device.device_class'};
+	    next unless ($args{'deviceclass'} =~ /$tmp/i);
+	}
+	if (defined $args{'host'}) {
+	    next unless ($ear{'/device/uid'} eq $args{'hostpath'});
+	}
+	if (defined $args{'group'}) {
+	    next unless ($ear{'/details/grname'} eq $args{'group'});
+	}
+	if (defined $args{'system'}) {
+	    my $tmp=$ear{'/details/zenoss.device.systems'};
+	    next unless ($args{'system'} =~ /$tmp/i);
+	}
+	
+	if ($args{'printjson'}=~/yes/i) {
+	    my @json;
+	    if (defined $pfields{'/all'}) {
+		foreach my $x (sort keys %ear) { $ear{$x}=~s/\\//g; push @json, qq("$x":"$ear{$x}"); }
+	    } else {
+		foreach my $x (sort keys %pfields) { next if ($x eq '/all'); $ear{$x}=~s/\\//g; push @json, qq("$x":"$ear{$x}"); }
+	    }
+	    print "{" . join(",",@json) . "}\n";
+	} else {
+	    if (defined $pfields{'/all'}) {
+		foreach my $x (sort keys %ear) { print qq($x: $ear{$x}\n); }
+	    } else {
+		foreach my $x (sort keys %pfields) { next if ($x eq '/all'); print qq($x: $ear{$x}\n); }
+	    }
+	    print "------------------------------------------------\n" if ($fieldcount>1);
+	}
+    }
 
 }
 

@@ -25,16 +25,16 @@ my $ZENBASE  = 'http://zenoss:8080';
 my $ZAPIUSER = 'apiuser';
 my $ZAPIPASS = 'zapiuser';
 
+package zapi_toolkit;
+use JSON::Parse ':all';
+use Data::Dumper;
+
 #=============================================================================
 # Function ZCURLPOST
 # Invokes the curl post JSON api method
 # zcurlpost <endpoint> <action> <method> <data>
 # uses ZENBASE, ZAPIUSER, and ZAPIPASS variables
 #=============================================================================
-package zapi_toolkit;
-use JSON::Parse ':all';
-use Data::Dumper;
-
 sub zcurlpost {
     my ($ROUTER_ENDPOINT,$ROUTER_ACTION,$ROUTER_METHOD,$DATA) = @_;
 
@@ -240,13 +240,14 @@ sub getCollectorList {
 
 #=============================================================================
 # sub get_valid_values 
-# will return a list of valid values for getProductionStates, getPriorities, getDeviceClasses
+# returns a list of valid values for:
+# getProductionStates, getPriorities, getDeviceClasses, getGroups, getSystems, getAlertStates
 #=============================================================================
 sub get_valid_values {
     my ($type) = @_;
 
-    die "Type must be one of getProductionStates|getPriorities|getDeviceClasses|getGroups|getSystems\n"
-	unless ($type =~ /^(getProductionStates|getPriorities|getDeviceClasses|getGroups|getSystems)$/);
+    die "Type must be one of getProductionStates|getPriorities|getDeviceClasses|getGroups|getSystems|getAlertStates\n"
+	unless ($type =~ /^(getProductionStates|getPriorities|getDeviceClasses|getGroups|getSystems|getAlertStates)$/);
 
 #these two come back with name/value pairs
 #   perl json_wrapper post "device_router" "DeviceRouter" "getProductionStates" "{}"
@@ -266,7 +267,11 @@ sub get_valid_values {
 	$resfield='groups';
     } elsif ($type eq "getSystems") {
 	$resfield='systems';
+    } elsif ($type eq "getAlertStates") {
+        my %alertstates=('new', 0, 'acknowledged', 1, 'suppressed', 2, 'closed', 3, 'cleared', 4, 'aged', 6);
+        return %alertstates;
     }
+
     my $output = &zapi_toolkit::zcurlpost("device_router","DeviceRouter","$type");
     my $parsed= parse_json($output);
     my $total=@{%$parsed->{'result'}->{$resfield}};
