@@ -28,11 +28,19 @@ require 'zapi_toolkit.pl';
 my $global_get_devices_limit=3000;
 
 my $debug=0;
-my $myname=shift;
 
 getopts('ch',\%opts);
 if (defined $opts{'h'}) {
     &usage;
+}
+
+my $myname=shift;
+
+if (defined $opts{'c'}) {
+    print "Host,Process,Status,Monitored\n";
+} else {
+    printf "%-20.20s %-50.50s %-8.8s %-10.10s\n", "Host", "Process", "Status", "Monitored";
+    printf "=" x 86 . "\n";
 }
 
 my $data=qq({"params":{"meta_type":"OsProcessClass"}});
