@@ -34,11 +34,14 @@ my $debugold=0;
 
 my %opts;
 my $summary;
-my $device;
 my $component;
 my $severity=2;
 my $evclass="/Unknown";
 my $evkey;
+
+my $device; #may be overridden by opt_d
+chomp ($device = `uname -n`);
+($device) = $device =~ /^(\w+)\.*/; #return first part if dotted hostname
 
 getopts('s:d:c:v:e:k:h',\%opts);
 if (defined $opts{'h'}) {
@@ -73,15 +76,17 @@ unless ($summary) {
     &usage;
 }
 
+$device=uc($device); #upcase please
+
 my $data=qq({"summary":"$summary","device":"$device","component":"$component","severity":$severity,"evclasskey":"$evkey","evclass":"$evclass"});
 my $output = &zapi_toolkit::zcurlpost("evconsole_router","EventsRouter","add_event",$data);
+my $parsed= parse_json($output);
 
-#actually doesn't return anything of value....
 my ($retval,$msg) = &zapi_toolkit::catchJsonErrors($output);
 if ($retval) {
-    print "${deviceName} ($manageIp), error: ${msg}\n";
+    print STDERR "Add event error ($device/$summary); error: ${msg}\n";
 } else {
-    print "${deviceName} ($manageIp), success\n";
+    print "Added event ($device/$summary)\n";
 }
 
 
