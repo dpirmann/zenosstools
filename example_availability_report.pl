@@ -1,12 +1,16 @@
 #!/usr/bin/perl
 
 #=============================================================================
-# GET_MONTHLY_AVAILABILTY.pl - generate a monthly Availability Report
+# example_availability_report.pl
+
+# By David Pirmann. This script is an interface to the JSON API exposed by the
+# "Zenoss Core" product from www.zenoss.org. This script requires "zapi_toolkit" 
+# from https://github.com/dpirmann/zenosstools
+# See README and the project WIKI on above GITHUB site for more details.
+#
+# This script is hereby released under GNU General Public License version 2
+# See http://www.gnu.org/licenses/gpl-2.0.html for details.
 #=============================================================================
-
-use Getopt::Std;
-
-require 'zapi_toolkit.pl';
 
 sub usage {
     print "Usage: $0 [-g group] [-s system]\n";
@@ -16,6 +20,10 @@ sub usage {
     print "It will calculate first and last days of prior month for report period.\n";
     exit;
 }
+
+require 'zapi_toolkit.pl';
+
+use Getopt::Std;
 
 my $debug=1;
 
