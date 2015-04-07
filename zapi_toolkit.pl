@@ -524,3 +524,94 @@ sub modifymwindow {
 
     return $output;
 }
+
+
+
+#=============================================================================
+# sub zcurlreport
+# given some options and a report type, curl it out...
+#=============================================================================
+sub zcurlreport {
+    my ($report_type,$options) = @_;
+
+    $options=~ s/^\n//g; #remove leading
+    $options=~ s/\n$//g; #..and trailing carriage returns in case any were present
+
+    $debug=0;
+
+    my $ins;
+    if ($ZENBASE =~ /^https/) {
+        $ins=" --insecure ";
+    }
+
+    my $cmd = qq(curl $ins -s -u "$ZAPIUSER:$ZAPIPASS" -X POST $options "$ZENBASE/zport/dmd/Reports/$report_type");
+
+    print STDERR "zcurlreport value of report_type=\n$report_type\n--\n" if ($debug);
+    print STDERR "zcurlreport value of options=\n$options\n--\n" if ($debug);
+    print STDERR "zcurlreport value of CMD=\n$cmd\n--\n" if ($debug);
+
+    my $output = qx($cmd);
+
+    return $output;
+
+}
+
+
+#=============================================================================
+#sub lastmonthsdate 
+#returns a string containing the date of the first of last month in form 11/1/2014
+#=============================================================================
+sub lastmonthsdate {
+    #first find current date...
+    my ($sec,$min,$hour,$mday,$mon,$year,$wday,$yday,$isdst) = localtime(time());
+
+    #year from localtime is years since 1900
+    $year=$year+1900;
+
+    #mon from localtime is range 0..11
+    $mon=$mon+1;
+
+    if ($mon==1) { 
+	$mon=12;
+	$year=$year-1;  #last year
+    } else {
+	$mon=$mon-1;
+    }
+    return "$mon/1/$year";
+}
+
+#=============================================================================
+#sub lastmonthedate 
+#returns a string containing the date of the last day of last month in form 11/30/2014
+#=============================================================================
+sub lastmonthedate {
+    use DateTime;
+    #first find current date...
+    my ($sec,$min,$hour,$mday,$mon,$year,$wday,$yday,$isdst) = localtime(time());
+
+    #year from localtime is years since 1900
+    $year=$year+1900;
+
+    #mon from localtime is range 0..11
+    $mon=$mon+1;
+
+    if ($mon==1) { 
+	$mon=12;
+	$year=$year-1;  #last year
+    } else {
+	$mon=$mon-1;
+    }
+
+    my $date = DateTime->new(
+	year  =>  $year,
+	month => $mon,
+	);
+
+    my $date2 = DateTime->last_day_of_month(  
+	year  =>  $date->year,
+	month => $date->month,
+	);
+
+    return $date2->mdy('/');
+}
+
