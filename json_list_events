@@ -87,7 +87,6 @@ foreach my $x (split(/,/,$args{'fields'})) {
 $fieldcount++ if (defined $pfields{'/all'});
 
 #find hostpath if we gave arg host.
-my $hostpath;
 if (defined $args{'host'}) {
     $args{'hostpath'}=&zapi_toolkit::gethostuid($args{'host'});
 }
