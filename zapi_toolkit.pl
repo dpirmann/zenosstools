@@ -18,16 +18,17 @@
 #set up
 # * edit "ZENBASE", "ZAPIUSER", and "ZAPIPASS" vars.
 
-#zenbase is the URL to your zenoss implementation
-my $ZENBASE  = 'http://zenoss:8080';
-
 #zapiuser/zapipass - user/pass to use the zenoss api.
 my $ZAPIUSER = 'apiuser';
 my $ZAPIPASS = 'zapiuser';
 
+#zenbase is the URL to your zenoss implementation
+my $ZENBASE  = "http://$ZAPIUSER:$ZAPIPASS\@zenoss:8080";
+
 package zapi_toolkit;
 use JSON::Parse ':all';
 use Data::Dumper;
+use LWP::UserAgent;
 
 #=============================================================================
 # Function ZCURLPOST
@@ -38,25 +39,33 @@ use Data::Dumper;
 sub zcurlpost {
     my ($ROUTER_ENDPOINT,$ROUTER_ACTION,$ROUTER_METHOD,$DATA) = @_;
 
-    #all the quote marks inside the data string have to be escaped.
-    #i do it here so that the methods that call zcurlpost are a little
-    #easier to read
-    $DATA=~s/\"/\\"/g;
+    my $server_endpoint = "$ZENBASE/zport/dmd/$ROUTER_ENDPOINT";
+    my $post_data = qq({"action":"$ROUTER_ACTION","method":"$ROUTER_METHOD","data":[$DATA],"tid":1});
 
-    #zenoss5 runs under a self signed SSL cert (https) by default;
-    #so unless you have installed a real cert, ignore the warning
-    my $ins;
-    if ($ZENBASE =~ /^https/) {
-        $ins=" --insecure "; #
+    # create request, and set custom HTTP request header fields
+    my $req = HTTP::Request->new(POST => $server_endpoint);
+    $req->header('content-type' => 'application/json');
+    $req->content($post_data);
+
+    # create connection and send over request
+    # the ssl options are in case you're running Zenoss 5 which has a self signed cert by default
+    my $ua = LWP::UserAgent->new(ssl_opts => {SSL_verify_mode => IO::Socket::SSL::SSL_VERIFY_NONE,
+					      verify_hostname => 0, });
+    push @{ $ua->requests_redirectable }, 'POST'; #follow 302 and other redirect
+
+    my $resp = $ua->request($req);
+
+    if ($resp->is_success) {
+	my $message = $resp->decoded_content;
+	#print "Received reply: $message\n";
+	return ($message);
+    }
+    else {
+	print "HTTP POST error code: ", $resp->code, "\n";
+	print "HTTP POST error message: ", $resp->message, "\n";
+	die;
     }
 
-    #in the cmd there's those end of line escaped backslashes to make the command
-    #a little easier to read
-    my $cmd = qq(curl $ins -s -u "$ZAPIUSER:$ZAPIPASS" -X POST -H "Content-Type: application/json" \\
-    -d "{\\"action\\":\\"$ROUTER_ACTION\\",\\"method\\":\\"$ROUTER_METHOD\\",\\"data\\":[$DATA], \\"tid\\":1}" \\
-    "$ZENBASE/zport/dmd/$ROUTER_ENDPOINT");
-
-    return qx($cmd);
 }
 
 #=============================================================================
