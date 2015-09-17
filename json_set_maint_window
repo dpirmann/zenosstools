@@ -1,0 +1,66 @@
+#!/usr/bin/perl
+
+#=============================================================================
+# json_set_maint_window {hostname or ip} {time in minutes}
+#
+# Given an ipaddress or hostname, that matches exactly a single device in Zenoss,
+# and a length of time in minutes, start a Maintenance Window on device that
+# begins "now" and lasts for the length of time supplied. This is expected to 
+# be called by some automatic system like Autosys before it reboots a device, etc.
+#=============================================================================
+
+sub usage {
+    print "Usage: $0 {hostname or ip} {time in minutes}\n\n";
+    print "Hostname or IP address must match exactly a device in Zenoss.\n";
+    print "Time must be an integer number of minutes.\n";
+    exit;
+}
+
+require '/home/zenoss/zenoss_scripts/zenoss_perl_api.pl';
+
+my $MWINDOWNAME="Autosys_MW"; #hardcoded default MW name
+
+my $debug=0;
+my $debugold=0;
+
+#----------------------------------------------------------------------
+# process arguments
+#----------------------------------------------------------------------
+my $host=shift;
+my $time=shift;
+
+&usage unless ($host && $time); # bail unless two args
+&usage if ($host =~ /^help$/); # handle help on the command line
+&usage if ($time != int($time)); # bail if it doesn't look like a numeric arg.
+
+
+#----------------------------------------------------------------------
+#find out the /zport/dmd/host/path for the given host argument
+#----------------------------------------------------------------------
+
+my $hostpath=zapi_toolkit::gethostuid($host);
+zapi_toolkit::hostPathCheck($0, $host, $hostpath);
+
+#----------------------------------------------------------------------
+#now, create a maintenance window on the given host
+#with the name $MWINDOWNAME (see above). if it already exists,
+#no harm no fowl
+#----------------------------------------------------------------------
+
+&zapi_toolkit::catchErrors(&zapi_toolkit::createmwindow ($MWINDOWNAME,$hostpath));
+
+#----------------------------------------------------------------------
+#then we will modify that MWINDOWNAME with the proper time parameters
+#----------------------------------------------------------------------
+
+&zapi_toolkit::catchErrors(&zapi_toolkit::modifymwindow ($MWINDOWNAME,$hostpath,$time));
+
+#----------------------------------------------------------------------
+#if we get here, the above is probably successful (catchErrors would exit),
+#so log the results
+#----------------------------------------------------------------------
+
+&zapi_toolkit::syslogger("INFO set maint window $MWINDOWNAME on $host for $time");
+
+exit;
+
